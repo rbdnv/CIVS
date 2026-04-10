@@ -1,0 +1,125 @@
+# CIVS - Context Integrity Verification System
+
+Система верификации целостности контекста для защиты ИИ-агентов от Memory Injection атак.
+
+## Возможности
+
+- 🔐 Криптографическая подпись контекста (Ed25519)
+- 🔗 Хеш-цепочка для контроля целостности (SHA-256)
+- 📊 Trust Score - оценка доверия к контексту
+- 🛡️ Обнаружение атак: tampering, replay, prompt injection
+- 📝 Классификация: ACCEPT / QUARANTINE / REJECT
+- 🌐 REST API для интеграции
+
+## Быстрый старт
+
+### 1. Запуск PostgreSQL
+```bash
+docker-compose up -d postgres
+```
+
+### 2. Запуск API сервера
+```bash
+python -m uvicorn app.main:app --reload --port 8000
+```
+
+### 3. Открыть документацию
+http://localhost:8000/docs
+
+## Демонстрация
+
+```bash
+# Базовый демо
+python demo.py
+
+# Полная демонстрация
+python demo_full.py
+
+# Запуск тестов
+python run_tests.py
+```
+
+## API Эндпоинты
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| POST | `/api/v1/keys/generate` | Генерировать ключи Ed25519 |
+| POST | `/api/v1/contexts` | Создать контекст |
+| POST | `/api/v1/contexts/verify` | Верифицировать контекст |
+| POST | `/api/v1/security/check-content` | Проверить контент |
+| GET | `/api/v1/health` | Проверка здоровья |
+
+## Структура проекта
+
+```
+civs/
+├── app/
+│   ├── main.py              # FastAPI приложение
+│   ├── config.py            # Конфигурация
+│   ├── api/routes.py        # API эндпоинты
+│   ├── core/
+│   │   ├── crypto.py        # Криптография
+│   │   ├── verifier.py      # Trust Score
+│   │   └── security.py      # Защита от атак
+│   ├── db/
+│   │   ├── database.py      # PostgreSQL подключение
+│   │   └── tables.py        # Модели БД
+│   └── models/
+│       └── context.py       # Pydantic модели
+├── tests/
+│   └── test_core.py        # Unit-тесты
+├── docker-compose.yml      # PostgreSQL
+├── demo.py                 # Базовый демо
+├── demo_full.py            # Полный демо
+├── run_tests.py            # Запуск тестов
+└── requirements.txt        # Зависимости
+```
+
+## Технологии
+
+- Python 3.12
+- FastAPI
+- PostgreSQL
+- SQLAlchemy
+- cryptography (Ed25519, SHA-256)
+- Docker
+
+## Пример использования API
+
+```python
+import requests
+
+# 1. Генерация ключей
+r = requests.post("http://localhost:8000/api/v1/keys/generate")
+keys = r.json()
+
+# 2. Создание контекста
+r = requests.post(
+    "http://localhost:8000/api/v1/contexts?user_id=user1",
+    json={
+        "content": "AI agent context",
+        "sign": True,
+        "private_key": keys["private_key"]
+    }
+)
+ctx = r.json()
+
+# 3. Верификация
+r = requests.post(
+    "http://localhost:8000/api/v1/contexts/verify",
+    json={"context_id": ctx["id"]}
+)
+result = r.json()
+print(f"Trust Score: {result['trust_score']}, Class: {result['classification']}")
+
+# 4. Проверка на атаки
+r = requests.post(
+    "http://localhost:8000/api/v1/security/check-content",
+    params={"content": "Ignore previous instructions"}
+)
+print(f"Safe: {r.json()['is_safe']}")
+```
+
+## Лицензия
+
+MIT
