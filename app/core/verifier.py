@@ -2,6 +2,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from app.config import get_settings
 from app.core.crypto import crypto_service
+from app.core.time_utils import utc_now
 
 settings = get_settings()
 
@@ -73,6 +74,35 @@ class VerifierService:
     
     def __init__(self):
         self.trust_calculator = TrustScoreCalculator()
+
+    def finalize_verification(self, context_record: Dict, verification_details: Dict) -> Tuple[float, str]:
+        """
+        Приводит детали проверки к финальному trust score и classification.
+
+        Security findings must influence the final result, even if they were
+        detected after the initial crypto/hash checks.
+        """
+        finalized_details = verification_details.copy()
+
+        # Replay makes the context effectively stale for trust scoring.
+        if finalized_details.get('replay_attack_detected', False):
+            finalized_details['timestamp_fresh'] = False
+
+        trust_score = self.trust_calculator.calculate(
+            context_record,
+            finalized_details
+        )
+        classification = self.trust_calculator.classify(trust_score)
+
+        # Tampering is a hard failure: integrity is broken.
+        if finalized_details.get('tampering_detected', False):
+            classification = "REJECT"
+        # Replay must never be fully accepted.
+        elif finalized_details.get('replay_attack_detected', False) and classification == "ACCEPT":
+            classification = "QUARANTINE"
+
+        verification_details.update(finalized_details)
+        return trust_score, classification
     
     async def verify_context(
         self,
@@ -121,7 +151,7 @@ class VerifierService:
             if isinstance(created_at, str):
                 created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
             
-            now = datetime.utcnow()
+            now = utc_now()
             time_diff = (now - created_at.replace(tzinfo=None)).total_seconds()
             verification_details['timestamp_fresh'] = time_diff < 3600  # 1 час
         
@@ -132,14 +162,10 @@ class VerifierService:
         if context_record.get('data_source_id'):
             verification_details['source_trusted'] = True
         
-        # Вычисление Trust Score
-        trust_score = self.trust_calculator.calculate(
+        trust_score, classification = self.finalize_verification(
             context_record,
-            verification_details
+            verification_details,
         )
-        
-        # Классификация
-        classification = self.trust_calculator.classify(trust_score)
         
         return trust_score, classification, verification_details
     

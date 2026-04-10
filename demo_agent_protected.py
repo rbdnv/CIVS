@@ -9,6 +9,7 @@ import time
 import io
 import os
 import urllib.request
+import urllib.error
 import json
 
 # Fix Windows console encoding
@@ -17,7 +18,16 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 
-def http_post(url: str, data: dict = None, params: str = None) -> dict:
+class APIRequestError(Exception):
+    """HTTP error wrapper for the demo client."""
+
+    def __init__(self, status_code: int, body: dict):
+        self.status_code = status_code
+        self.body = body
+        super().__init__(f"HTTP {status_code}: {body}")
+
+
+def http_post(url: str, data: dict = None, params: str = None, headers: dict = None) -> dict:
     """Simple HTTP POST without requests library"""
     import urllib.request
     import urllib.parse
@@ -29,18 +39,30 @@ def http_post(url: str, data: dict = None, params: str = None) -> dict:
     
     json_data = json.dumps(data).encode('utf-8') if data else None
     
+    request_headers = {'Content-Type': 'application/json'}
+    if headers:
+        request_headers.update(headers)
+
     req = urllib.request.Request(
         url, 
         data=json_data,
-        headers={'Content-Type': 'application/json'},
+        headers=request_headers,
         method='POST'
     )
-    
-    with urllib.request.urlopen(req, timeout=10) as response:
-        return json.loads(response.read().decode('utf-8'))
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            return json.loads(response.read().decode('utf-8'))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode('utf-8')
+        try:
+            parsed_body = json.loads(body)
+        except json.JSONDecodeError:
+            parsed_body = {"detail": body}
+        raise APIRequestError(exc.code, parsed_body) from exc
 
 
-def http_get(url: str, params: str = None) -> dict:
+def http_get(url: str, params: str = None, headers: dict = None) -> dict:
     """Simple HTTP GET without requests library"""
     import urllib.request
     import urllib.parse
@@ -48,8 +70,18 @@ def http_get(url: str, params: str = None) -> dict:
     if params:
         url = f"{url}?{params}"
     
-    with urllib.request.urlopen(url, timeout=10) as response:
-        return json.loads(response.read().decode('utf-8'))
+    req = urllib.request.Request(url, headers=headers or {}, method='GET')
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            return json.loads(response.read().decode('utf-8'))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode('utf-8')
+        try:
+            parsed_body = json.loads(body)
+        except json.JSONDecodeError:
+            parsed_body = {"detail": body}
+        raise APIRequestError(exc.code, parsed_body) from exc
 
 
 def http_get_simple(url: str) -> dict:
@@ -81,12 +113,56 @@ class CIVSClient:
     
     def __init__(self, base_url: str = "http://localhost:8000/api/v1"):
         self.base_url = base_url
+        self.access_token = None
+        self.user_id = None
+
+    def _auth_headers(self) -> dict:
+        if not self.access_token:
+            return {}
+        return {"Authorization": f"Bearer {self.access_token}"}
     
     def generate_keys(self) -> dict:
         """Генерация ключей"""
         return http_post(f"{self.base_url}/keys/generate")
-    
-    def create_context(self, user_id: str, content: str, sign: bool = False, 
+
+    def register(self, username: str, password: str, email: str, is_admin: bool = False) -> dict:
+        """Регистрация пользователя"""
+        result = http_post(
+            f"{self.base_url}/auth/register",
+            {
+                "username": username,
+                "password": password,
+                "email": email,
+                "is_admin": is_admin,
+            },
+        )
+        self.access_token = result["access_token"]
+        self.user_id = result["user_id"]
+        return result
+
+    def login(self, username: str, password: str) -> dict:
+        """Логин пользователя"""
+        result = http_post(
+            f"{self.base_url}/auth/login",
+            {
+                "username": username,
+                "password": password,
+            },
+        )
+        self.access_token = result["access_token"]
+        self.user_id = result["user_id"]
+        return result
+
+    def ensure_authenticated(self, username: str, password: str, email: str) -> dict:
+        """Регистрирует пользователя или логинится в существующего."""
+        try:
+            return self.register(username, password, email)
+        except APIRequestError as exc:
+            if exc.status_code == 400 and exc.body.get("detail") == "Username already registered":
+                return self.login(username, password)
+            raise
+
+    def create_context(self, content: str, sign: bool = False,
                       private_key: str = None, session_id: str = None) -> dict:
         """Создание контекста"""
         data = {"content": content, "sign": sign}
@@ -95,11 +171,19 @@ class CIVSClient:
         if session_id:
             data["session_id"] = session_id
         
-        return http_post(f"{self.base_url}/contexts?user_id={user_id}", data)
+        return http_post(
+            f"{self.base_url}/contexts",
+            data,
+            headers=self._auth_headers(),
+        )
     
     def verify_context(self, context_id: str) -> dict:
         """Верификация контекста"""
-        return http_post(f"{self.base_url}/contexts/verify", {"context_id": context_id})
+        return http_post(
+            f"{self.base_url}/contexts/verify",
+            {"context_id": context_id},
+            headers=self._auth_headers(),
+        )
     
     def check_content(self, content: str) -> dict:
         """Проверка контента на атаки - использует POST с данными в теле"""
@@ -122,13 +206,22 @@ class ProtectedAgent:
         self.private_key = keys["private_key"]
         self.public_key = keys["public_key"]
         return keys
-    
-    def add_to_memory(self, content: str, user_id: str = "default") -> dict:
+
+    def add_to_memory(self, content: str) -> dict:
         """Добавить контекст в память с проверкой CIVS"""
+
+        content_check = self.civs.check_content(content)
+        if not content_check.get("is_safe", False):
+            print(f"{RED}[X] CIVS: Podozritelnyi kontent obnaruzhen do dobavleniya v pamyat{RESET}")
+            print(f"{RED}   Patterns: {content_check.get('detected_patterns', {})}{RESET}")
+            return {
+                "accepted": False,
+                "reason": "REJECT",
+                "trust_score": 0.0,
+            }
         
         # Создаём контекст с подписью (это основная защита)
         context = self.civs.create_context(
-            user_id=user_id,
             content=content,
             sign=True,
             private_key=self.private_key
@@ -204,6 +297,14 @@ def run_demo():
     print_step(1, "Inicializaciya agenta")
     print("-" * 50)
     
+    print(f"{CYAN}Registraciya ili login demo-polzovatelya...{RESET}")
+    auth = civs.ensure_authenticated(
+        username="protected-agent-demo",
+        password="secret123",
+        email="protected-agent-demo@example.com",
+    )
+    print(f"{GREEN}[OK] Auth uspeshna. User ID: {auth['user_id']}{RESET}")
+
     print(f"{CYAN}Inicializaciya kluchei Ed25519...{RESET}")
     keys = agent.initialize_keys()
     print(f"{GREEN}[OK] Klyuchi sgenerirovany{RESET}")
@@ -222,7 +323,7 @@ def run_demo():
     
     # Добавляем в память с проверкой CIVS
     context_content = f"User: {user_input}, AI: {response}"
-    result = agent.add_to_memory(context_content, user_id="user1")
+    result = agent.add_to_memory(context_content)
     
     if result["accepted"]:
         print(f"{GREEN}[OK] Kontekst dobavlen v zaschischennuyu pamyat{RESET}\n")
@@ -241,7 +342,7 @@ def run_demo():
     print(f"{MAGENTA}[AGENT]{RESET} {response}")
     
     context_content = f"User: {user_input}, AI: {response}"
-    result = agent.add_to_memory(context_content, user_id="user1")
+    result = agent.add_to_memory(context_content)
     
     if result["accepted"]:
         print(f"{GREEN}[OK] Kontekst dobavlen v zaschischennuyu pamyat{RESET}\n")
@@ -261,7 +362,7 @@ def run_demo():
     print(f"{YELLOW}   {malicious_context[:60]}...{RESET}\n")
     
     # Пытаемся добавить вредоносный контекст
-    result = agent.add_to_memory(malicious_context, user_id="attacker")
+    result = agent.add_to_memory(malicious_context)
     
     time.sleep(0.5)
     

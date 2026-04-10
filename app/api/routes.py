@@ -9,6 +9,7 @@ import uuid
 
 from app.db.database import get_db, init_db
 from app.config import get_settings
+from app.core.time_utils import utc_now, utc_now_iso
 from app.models.context import (
     ContextCreate,
     ContextResponse,
@@ -152,7 +153,7 @@ async def health_check():
     return HealthResponse(
         status="healthy",
         database="connected",
-        timestamp=datetime.utcnow()
+        timestamp=utc_now()
     )
 
 
@@ -183,11 +184,16 @@ async def create_context(
     3. Сохраняем в БД
     """
     user_id = current_user["user_id"]
-    
+
+    context_id = str(uuid.uuid4())
+    created_at = utc_now()
+    created_at_iso = created_at.isoformat()
+
     # Вычисление хеша
     content_hash = crypto_service.compute_hash_chain(
         context_data.content,
-        context_data.previous_hash
+        context_data.previous_hash,
+        created_at_iso,
     )
     
     # Подпись (если запрошена)
@@ -196,10 +202,10 @@ async def create_context(
     
     if context_data.sign and context_data.private_key:
         context_dict = {
-            'id': '',  # Will be generated
+            'id': context_id,
             'user_id': user_id,
             'content': context_data.content,
-            'created_at': datetime.utcnow().isoformat(),
+            'created_at': created_at_iso,
         }
         signature = crypto_service.sign_context(
             context_data.private_key,
@@ -217,10 +223,6 @@ async def create_context(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         ).decode('utf-8')
-    
-    # Создание записи
-    import uuid
-    context_id = str(uuid.uuid4())
     
     # Создаем пользователя если не существует (для тестирования)
     result = await db.execute(select(User).where(User.id == user_id))
@@ -251,6 +253,7 @@ async def create_context(
         data_source_id=context_data.data_source_id,
         signature=signature,
         public_key=public_key,
+        created_at=created_at,
     )
     
     db.add(new_context)
@@ -327,6 +330,7 @@ async def verify_context(
             context.content,
             context.content_hash,
             context.previous_hash,
+            context.created_at.isoformat() if context.created_at else None,
         )
         verification_details['tampering_detected'] = tampering_detected
     
@@ -335,6 +339,11 @@ async def verify_context(
             context.created_at.isoformat()
         )
         verification_details['replay_attack_detected'] = replay_attack_detected
+
+    trust_score, classification = verifier_service.finalize_verification(
+        context_data,
+        verification_details,
+    )
     
     # Сохранение результата верификации
     verification_result = VerificationResult(
@@ -351,7 +360,7 @@ async def verify_context(
     # Обновление контекста
     context.trust_score = trust_score
     context.classification = classification
-    context.verified_at = datetime.utcnow()
+    context.verified_at = utc_now()
     
     # Логирование
     audit_log = AuditLog(
@@ -378,7 +387,7 @@ async def verify_context(
         tampering_detected=tampering_detected,
         replay_attack_detected=replay_attack_detected,
         details=verification_details,
-        verified_at=datetime.utcnow(),
+        verified_at=utc_now(),
     )
 
 
@@ -498,7 +507,7 @@ async def check_content_security(
     return {
         "is_safe": len(suspicious) == 0,
         "detected_patterns": suspicious,
-        "checked_at": datetime.utcnow().isoformat(),
+        "checked_at": utc_now_iso(),
     }
 
 
@@ -529,7 +538,7 @@ async def verify_file_for_rag(
         'user_id': current_user['user_id'],
         'content': file_data.file_content,
         'content_hash': content_hash,
-        'created_at': datetime.utcnow().isoformat(),
+        'created_at': utc_now_iso(),
     }
     
     # Верификация (без подписи для файлов)
@@ -538,6 +547,13 @@ async def verify_file_for_rag(
         signature=None,
         public_key=None,
     )
+
+    if suspicious:
+        verification_details['tampering_detected'] = True
+        trust_score, classification = verifier_service.finalize_verification(
+            context_record,
+            verification_details,
+        )
     
     # Добавление результатов проверки контента
     verification_details['suspicious_content'] = suspicious
@@ -582,5 +598,5 @@ async def verify_file_for_rag(
         trust_score=trust_score,
         classification=classification,
         verification_details=verification_details,
-        verified_at=datetime.utcnow(),
+        verified_at=utc_now(),
     )

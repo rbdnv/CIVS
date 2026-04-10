@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional
 from app.config import get_settings
 from app.core.crypto import crypto_service
+from app.core.time_utils import utc_now
 
 settings = get_settings()
 
@@ -39,7 +40,7 @@ class SecurityService:
         """
         try:
             request_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-            current_time = datetime.utcnow()
+            current_time = utc_now()
             
             time_diff = (current_time - request_time.replace(tzinfo=None)).total_seconds()
             
@@ -52,7 +53,7 @@ class SecurityService:
         """Проверка свежести контекста"""
         try:
             created_time = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-            current_time = datetime.utcnow()
+            current_time = utc_now()
             
             age = (current_time - created_time.replace(tzinfo=None)).total_seconds()
             
@@ -66,17 +67,38 @@ class SecurityService:
         (для Memory Injection атак)
         """
         suspicious_patterns = {
-            'script_injection': ['<script>', 'javascript:', 'onerror=', 'onload='],
-            'prompt_injection': ['ignore previous', 'disregard', 'forget rules', 'new instructions'],
-            'memory_poisoning': ['system prompt', 'override', 'change your behavior'],
-            'command_injection': ['|', ';', '&&', '$(', '`'],
+            'script_injection': {
+                'script_injection': ['<script>', 'javascript:', 'onerror=', 'onload='],
+            },
+            'prompt_injection': {
+                'ignore previous': [
+                    'ignore previous',
+                    'ignore all previous',
+                    'ignore all previous instructions',
+                ],
+                'disregard': ['disregard'],
+                'forget rules': ['forget rules'],
+                'new instruction': ['new instruction', 'new instructions'],
+            },
+            'memory_poisoning': {
+                'system prompt': ['system prompt'],
+                'override': ['override'],
+                'change your behavior': ['change your behavior'],
+            },
+            'command_injection': {
+                'command_injection': ['|', ';', '&&', '$(', '`'],
+            },
         }
         
         detected = {}
         content_lower = content.lower()
         
         for category, patterns in suspicious_patterns.items():
-            matches = [p for p in patterns if p in content_lower]
+            matches = [
+                canonical_pattern
+                for canonical_pattern, aliases in patterns.items()
+                if any(alias in content_lower for alias in aliases)
+            ]
             if matches:
                 detected[category] = matches
         

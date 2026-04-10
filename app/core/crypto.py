@@ -6,9 +6,9 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.hmac import HMAC
 from cryptography.hazmat.backends import default_backend
-from datetime import datetime
 from typing import Tuple, Optional
 import json
+from app.core.time_utils import utc_now_iso
 
 
 class CryptoService:
@@ -51,14 +51,14 @@ class CryptoService:
         Вычисляет хеш-цепочку
         Formula: H_n = Hash(Content_n + H_{n-1} + Timestamp)
         """
-        if timestamp is None:
-            timestamp = self.get_timestamp()
-        
+        parts = [content]
+
         if previous_hash:
-            data = content + previous_hash + timestamp
-        else:
-            data = content + timestamp
-        
+            parts.append(previous_hash)
+        if timestamp is not None:
+            parts.append(timestamp)
+
+        data = "".join(parts)
         return self.compute_hash(data)
     
     def sign_context(self, private_key_pem: str, context_data: dict) -> str:
@@ -152,7 +152,7 @@ class CryptoService:
     
     def get_timestamp(self) -> str:
         """Получает текущую метку времени"""
-        return datetime.utcnow().isoformat()
+        return utc_now_iso()
 
 
 crypto_service = CryptoService()

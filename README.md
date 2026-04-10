@@ -43,9 +43,11 @@ python run_tests.py
 
 | Метод | Путь | Описание |
 |-------|------|----------|
+| POST | `/api/v1/auth/register` | Зарегистрировать пользователя и получить JWT |
+| POST | `/api/v1/auth/login` | Войти и получить JWT |
 | POST | `/api/v1/keys/generate` | Генерировать ключи Ed25519 |
-| POST | `/api/v1/contexts` | Создать контекст |
-| POST | `/api/v1/contexts/verify` | Верифицировать контекст |
+| POST | `/api/v1/contexts` | Создать контекст, требуется Bearer token |
+| POST | `/api/v1/contexts/verify` | Верифицировать контекст, требуется Bearer token |
 | POST | `/api/v1/security/check-content` | Проверить контент |
 | GET | `/api/v1/health` | Проверка здоровья |
 
@@ -89,13 +91,27 @@ civs/
 ```python
 import requests
 
-# 1. Генерация ключей
+# 1. Регистрация пользователя
+r = requests.post(
+    "http://localhost:8000/api/v1/auth/register",
+    json={
+        "username": "demo-user",
+        "password": "secret123",
+        "email": "demo-user@example.com",
+        "is_admin": False,
+    }
+)
+auth = r.json()
+headers = {"Authorization": f"Bearer {auth['access_token']}"}
+
+# 2. Генерация ключей
 r = requests.post("http://localhost:8000/api/v1/keys/generate")
 keys = r.json()
 
-# 2. Создание контекста
+# 3. Создание контекста
 r = requests.post(
-    "http://localhost:8000/api/v1/contexts?user_id=user1",
+    "http://localhost:8000/api/v1/contexts",
+    headers=headers,
     json={
         "content": "AI agent context",
         "sign": True,
@@ -104,15 +120,16 @@ r = requests.post(
 )
 ctx = r.json()
 
-# 3. Верификация
+# 4. Верификация
 r = requests.post(
     "http://localhost:8000/api/v1/contexts/verify",
+    headers=headers,
     json={"context_id": ctx["id"]}
 )
 result = r.json()
 print(f"Trust Score: {result['trust_score']}, Class: {result['classification']}")
 
-# 4. Проверка на атаки
+# 5. Проверка на атаки
 r = requests.post(
     "http://localhost:8000/api/v1/security/check-content",
     params={"content": "Ignore previous instructions"}

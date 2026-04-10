@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from app.core.time_utils import utc_now
 
 
 class ContextCreate(BaseModel):
@@ -23,6 +24,8 @@ class ContextCreate(BaseModel):
 
 class ContextResponse(BaseModel):
     """Модель ответа контекста"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
     session_id: Optional[str]
@@ -49,10 +52,6 @@ class ContextResponse(BaseModel):
     created_at: datetime
     verified_at: Optional[datetime]
     
-    class Config:
-        from_attributes = True
-
-
 class ContextVerifyRequest(BaseModel):
     """Запрос на верификацию контекста"""
     context_id: str = Field(..., description="ID контекста для верификации")
@@ -76,6 +75,8 @@ class ContextVerifyResponse(BaseModel):
 
 class VerificationResultResponse(BaseModel):
     """Результат верификации"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     context_id: str
     trust_score: float
@@ -86,12 +87,10 @@ class VerificationResultResponse(BaseModel):
     details: Optional[Dict[str, Any]]
     created_at: datetime
     
-    class Config:
-        from_attributes = True
-
-
 class SecurityEventResponse(BaseModel):
     """Событие безопасности"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     event_type: str
     severity: str
@@ -102,12 +101,10 @@ class SecurityEventResponse(BaseModel):
     ip_address: Optional[str]
     created_at: datetime
     
-    class Config:
-        from_attributes = True
-
-
 class AuditLogResponse(BaseModel):
     """Запись аудита"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: Optional[str]
     action: str
@@ -118,10 +115,6 @@ class AuditLogResponse(BaseModel):
     user_agent: Optional[str]
     created_at: datetime
     
-    class Config:
-        from_attributes = True
-
-
 class KeyPairResponse(BaseModel):
     """Пара ключей"""
     private_key: str
@@ -139,7 +132,7 @@ class ErrorResponse(BaseModel):
     """Ошибка"""
     error: str
     detail: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
 
 
 class FileVerifyRequest(BaseModel):

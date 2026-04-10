@@ -1,8 +1,10 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
+
     DATABASE_URL: str = "postgresql+asyncpg://civs_user:civs_password@localhost:5432/civs_db"
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
@@ -19,10 +21,6 @@ class Settings(BaseSettings):
     # Replay attack window (seconds)
     REPLAY_WINDOW_SECONDS: int = 30
     
-    class Config:
-        env_file = ".env"
-
-
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()

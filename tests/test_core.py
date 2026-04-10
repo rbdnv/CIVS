@@ -1,4 +1,5 @@
 import pytest
+from datetime import UTC, datetime
 from app.core.crypto import crypto_service
 from app.core.security import security_service
 from app.core.verifier import TrustScoreCalculator, verifier_service
@@ -128,15 +129,13 @@ class TestSecurity:
     
     def test_detect_replay_attack_fresh(self):
         """Тест обнаружения fresh контекста (не атака)"""
-        import datetime
-        current_time = datetime.datetime.utcnow().isoformat()
+        current_time = datetime.now(UTC).replace(tzinfo=None).isoformat()
         
         is_replay = security_service.detect_replay_attack(current_time)
         assert is_replay is False
     
     def test_detect_replay_attack_old(self):
         """Тест обнаружения атаки replay со старым контекстом"""
-        import datetime
         old_time = "2024-01-01T00:00:00"
         
         is_replay = security_service.detect_replay_attack(old_time)
@@ -261,6 +260,47 @@ class TestVerifier:
         
         result = calculator.classify(0.0)
         assert result == "REJECT"
+
+    def test_finalize_verification_rejects_tampering(self):
+        """Tampering должен переводить результат в REJECT."""
+        context_record = {"content": "safe"}
+        verification_result = {
+            'signature_valid': True,
+            'hash_chain_valid': True,
+            'timestamp_fresh': True,
+            'tampering_detected': True,
+            'replay_attack_detected': False,
+            'source_trusted': True,
+        }
+
+        score, classification = verifier_service.finalize_verification(
+            context_record,
+            verification_result,
+        )
+
+        assert score == 0.75
+        assert classification == "REJECT"
+
+    def test_finalize_verification_quarantines_replay(self):
+        """Replay не должен оставаться ACCEPT и должен снижать свежесть."""
+        context_record = {"content": "safe"}
+        verification_result = {
+            'signature_valid': True,
+            'hash_chain_valid': True,
+            'timestamp_fresh': True,
+            'tampering_detected': False,
+            'replay_attack_detected': True,
+            'source_trusted': True,
+        }
+
+        score, classification = verifier_service.finalize_verification(
+            context_record,
+            verification_result,
+        )
+
+        assert verification_result['timestamp_fresh'] is False
+        assert score == 0.85
+        assert classification == "QUARANTINE"
     
     def test_analyze_features(self):
         """Тест анализа признаков контента"""

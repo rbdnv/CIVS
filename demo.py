@@ -10,7 +10,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from datetime import datetime
+from datetime import UTC, datetime
 import io
 import sys
 
@@ -57,7 +57,7 @@ async def demo():
         'id': 'ctx-001',
         'user_id': 'user-001',
         'content': context_content,
-        'created_at': datetime.utcnow().isoformat(),
+        'created_at': datetime.now(UTC).replace(tzinfo=None).isoformat(),
     }
     
     signature = crypto_service.sign_context(private_key, context_data)
@@ -175,7 +175,7 @@ async def demo():
         'id': 'ctx-001',
         'user_id': 'user-001',
         'content': context_content,
-        'created_at': datetime.utcnow().isoformat(),
+        'created_at': datetime.now(UTC).replace(tzinfo=None).isoformat(),
     }
     
     signature = crypto_service.sign_context(private_key, context_data)
