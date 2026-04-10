@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CIVS Demo Comparison</title>
+  <link rel="stylesheet" href="/static/demo/compare.css">
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <span class="eyebrow">Демонстрация • FastAPI Inside</span>
+      <h1>Работоспособность системы CIVS в двух примерах.</h1>
+      <p class="hero-copy">
+        Эта страница показывает один и тот же сценарий в двух режимах. Слева вредоносный контекст
+        напрямую попадает в память агента и ломает его поведение. Справа тот же payload проходит
+        через CIVS: проверку контента, подпись, hash-chain и trust score, после чего опасный
+        контекст блокируется до обращения к ИИ-агенту.
+      </p>
+      <div class="hero-actions">
+        <button class="primary" onclick="runFullDemo()">Запустить полный сценарий</button>
+        <button class="safe" onclick="applyPresetSafe()">Добавить безопасный контекст</button>
+        <button class="danger" onclick="applyPresetAttack()">Попробовать memory injection</button>
+        <button class="ghost" onclick="resetDemo()">Сбросить демонстрацию</button>
+      </div>
+    </section>
+
+    <section class="overview" id="overview"></section>
+
+    <section class="layout">
+      <div class="compare-grid">
+        <section class="panel lane lane-danger" id="vulnerableLane"></section>
+        <section class="panel lane lane-safe" id="protectedLane"></section>
+      </div>
+
+      <aside class="panel">
+        <div class="control-grid">
+          <div>
+            <label for="contextInput">Контекст для добавления в память</label>
+            <textarea id="contextInput"></textarea>
+            <p class="hint">
+              Можно вставить свой payload. Он будет отправлен в обе версии: без CIVS и с CIVS.
+            </p>
+          </div>
+
+          <div class="control-actions">
+            <button class="primary" onclick="submitCustomContext()">Отправить свой контекст</button>
+            <button class="ghost" onclick="fillSafeExample()">Подставить безопасный пример</button>
+            <button class="ghost" onclick="fillAttackExample()">Подставить вредоносный пример</button>
+          </div>
+
+          <div>
+            <label for="questionInput">Вопрос агенту после записи в память</label>
+            <input id="questionInput" />
+            <p class="hint">
+              После успешной атаки агент без CIVS ответит <strong>HACKED</strong>. Защищённый агент
+              продолжит обычный диалог.
+            </p>
+          </div>
+
+          <div class="control-actions">
+            <button class="primary" onclick="askQuestion()">Задать вопрос</button>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="panel panel-spaced">
+      <div class="lane-header architecture-header">
+        <div>
+          <h2 class="lane-title">Журнал событий</h2>
+          <p class="lane-subtitle">
+            Здесь видно, как один и тот же payload проходит по двум дорожкам.
+          </p>
+        </div>
+      </div>
+      <div class="events-list" id="eventsList"></div>
+    </section>
+
+    <section class="panel architecture-panel">
+      <div class="lane-header architecture-header">
+        <div>
+          <h2 class="lane-title">Архитектура решения</h2>
+          <p class="lane-subtitle">
+            Слева пользовательский контекст сразу попадает в память и влияет на ответы агента.
+            Справа между пользователем и агентом стоит CIVS, который фильтрует контекст до обращения к модели.
+          </p>
+        </div>
+      </div>
+
+      <div class="architecture-grid">
+        <article class="architecture-flow architecture-flow-danger">
+          <div class="architecture-badge architecture-badge-danger">Без CIVS</div>
+          <div class="architecture-chain">
+            <div class="architecture-node">
+              <span class="architecture-node-title">User</span>
+              <p>Отправляет любой контекст, включая инъекцию.</p>
+            </div>
+            <div class="architecture-arrow">→</div>
+            <div class="architecture-node architecture-node-danger">
+              <span class="architecture-node-title">Agent Memory</span>
+              <p>Контекст записывается без проверки.</p>
+            </div>
+            <div class="architecture-arrow">→</div>
+            <div class="architecture-node architecture-node-danger">
+              <span class="architecture-node-title">Agent</span>
+              <p>Агент следует внедрённой инструкции и отвечает <strong>HACKED</strong>.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="architecture-flow architecture-flow-safe">
+          <div class="architecture-badge architecture-badge-safe">С CIVS</div>
+          <div class="architecture-chain">
+            <div class="architecture-node">
+              <span class="architecture-node-title">User</span>
+              <p>Отправляет контекст или пытается внедрить payload.</p>
+            </div>
+            <div class="architecture-arrow">→</div>
+            <div class="architecture-node architecture-node-safe">
+              <span class="architecture-node-title">CIVS</span>
+              <p>Проверяет suspicious content, подпись, hash-chain и trust score.</p>
+            </div>
+            <div class="architecture-arrow">→</div>
+            <div class="architecture-node architecture-node-safe">
+              <span class="architecture-node-title">Agent</span>
+              <p>Получает только принятый контекст и сохраняет корректное поведение.</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel formulas-panel">
+      <div class="lane-header architecture-header">
+        <div>
+          <h2 class="lane-title">Формулы системы</h2>
+          
+        </div>
+      </div>
+
+      <div class="formula-grid">
+        <article class="formula-card">
+          <span class="formula-label">Signature</span>
+          <div class="formula-expression">S = Sign<sub>priv</sub>(SHA256(C<sub>norm</sub>))</div>
+          <p class="formula-copy">
+            Подпись доказывает, что контекст создан доверенным источником и не был подменён.
+          </p>
+        </article>
+
+        <article class="formula-card">
+          <span class="formula-label">Hash-Chain</span>
+          <div class="formula-expression">H<sub>n</sub> = SHA256(C<sub>n</sub> + H<sub>n-1</sub> + T<sub>n</sub>)</div>
+          <p class="formula-copy">
+            Каждый новый контекст связан с предыдущим, поэтому разрыв или подмена цепочки заметны.
+          </p>
+        </article>
+
+        <article class="formula-card">
+          <span class="formula-label">Trust Score</span>
+          <div class="formula-expression">Trust = Σ w<sub>i</sub> · f<sub>i</sub></div>
+          <p class="formula-copy">
+            Итоговое доверие считается по признакам верификации и переводится в ACCEPT, QUARANTINE или REJECT.
+          </p>
+        </article>
+      </div>
+
+      <div class="formula-legend">
+        <span class="chip">C<sub>norm</sub> = нормализованный контекст</span>
+        <span class="chip">T<sub>n</sub> = timestamp</span>
+        <span class="chip">w<sub>i</sub>, f<sub>i</sub> = веса и признаки</span>
+      </div>
+    </section>
+
+    
+
+    <section class="panel panel-spaced">
+      <div class="lane-header architecture-header">
+        <div>
+          <h2 class="lane-title">Как CIVS принимает решение</h2>
+          <p class="lane-subtitle">
+            Для страницы используется реальная серверная логика `security`, `crypto` и `verifier`.
+          </p>
+        </div>
+      </div>
+      <div class="detail-list" id="detailsGrid"></div>
+    </section>
+
+    
+  </div>
+
+  <script src="/static/demo/compare.js"></script>
+</body>
+</html>
