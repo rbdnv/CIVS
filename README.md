@@ -29,6 +29,11 @@ http://localhost:8000/docs
 ### 4. Открыть интерактивную демонстрацию
 http://localhost:8000/demo/compare
 
+## CI
+
+В репозитории настроен GitHub Actions workflow [`.github/workflows/ci.yml`](/home/said/project/.github/workflows/ci.yml).
+Он автоматически запускается на `push`, `pull_request` и вручную через `workflow_dispatch`, устанавливает зависимости, проверяет компиляцию Python-файлов и прогоняет весь тестовый набор.
+
 ## Демонстрация
 
 ```bash
