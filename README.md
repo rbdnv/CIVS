@@ -15,7 +15,7 @@
 
 ### 1. Запуск PostgreSQL
 ```bash
-docker-compose up -d postgres
+docker compose up -d postgres
 ```
 
 ### 2. Запуск API сервера
@@ -25,6 +25,9 @@ python -m uvicorn app.main:app --reload --port 8000
 
 ### 3. Открыть документацию
 http://localhost:8000/docs
+
+### 4. Открыть интерактивную демонстрацию
+http://localhost:8000/demo/compare
 
 ## Демонстрация
 
@@ -59,8 +62,10 @@ civs/
 │   ├── main.py              # FastAPI приложение
 │   ├── config.py            # Конфигурация
 │   ├── api/routes.py        # API эндпоинты
+│   ├── api/demo_routes.py   # Demo endpoints и страница сравнения
 │   ├── core/
 │   │   ├── crypto.py        # Криптография
+│   │   ├── demo_simulation.py # Логика сравнения "Без CIVS / С CIVS"
 │   │   ├── verifier.py      # Trust Score
 │   │   └── security.py      # Защита от атак
 │   ├── db/
@@ -68,10 +73,15 @@ civs/
 │   │   └── tables.py        # Модели БД
 │   └── models/
 │       └── context.py       # Pydantic модели
+│   └── static/demo/         # HTML/CSS/JS демонстрации
 ├── tests/
-│   └── test_core.py        # Unit-тесты
+│   ├── test_core.py         # Core unit-тесты
+│   ├── test_auth.py         # Auth unit-тесты
+│   └── test_demo_simulation.py # Demo flow unit-тесты
 ├── docker-compose.yml      # PostgreSQL
 ├── demo.py                 # Базовый демо
+├── demo_agent_vulnerable.py # Консольный сценарий без защиты
+├── demo_agent_protected.py  # Консольный сценарий с CIVS
 ├── demo_full.py            # Полный демо
 ├── run_tests.py            # Запуск тестов
 └── requirements.txt        # Зависимости
@@ -132,7 +142,7 @@ print(f"Trust Score: {result['trust_score']}, Class: {result['classification']}"
 # 5. Проверка на атаки
 r = requests.post(
     "http://localhost:8000/api/v1/security/check-content",
-    params={"content": "Ignore previous instructions"}
+    json={"content": "Ignore previous instructions"}
 )
 print(f"Safe: {r.json()['is_safe']}")
 ```

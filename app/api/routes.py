@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_
+from sqlalchemy.exc import IntegrityError
 from typing import Optional, List
 from datetime import datetime, timedelta
 import uuid
 
-from app.db.database import get_db, init_db
+from app.db.database import get_db
 from app.config import get_settings
 from app.core.time_utils import utc_now, utc_now_iso
 from app.models.context import (
@@ -23,8 +24,6 @@ from app.models.context import (
     FileVerifyRequest,
     FileVerifyResponse,
 )
-from app.config import get_settings
-
 settings = get_settings()
 
 from app.db.tables import ContextRecord, VerificationResult, AuditLog, User, DataSource, HashRecord
@@ -41,13 +40,6 @@ from app.core.auth import (
 )
 
 router = APIRouter(prefix="/api/v1", tags=["context"])
-
-
-@router.on_event("startup")
-async def startup_event():
-    """Инициализация БД при запуске"""
-    await init_db()
-
 
 class LoginRequest(BaseModel):
     username: str
@@ -113,13 +105,24 @@ async def register(
     db: AsyncSession = Depends(get_db),
 ):
     """Регистрация нового пользователя"""
-    result = await db.execute(select(User).where(User.username == register_data.username))
+    result = await db.execute(
+        select(User).where(
+            or_(
+                User.username == register_data.username,
+                User.email == register_data.email,
+            )
+        )
+    )
     existing_user = result.scalar_one_or_none()
     
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered"
+            detail=(
+                "Username already registered"
+                if existing_user.username == register_data.username
+                else "Email already registered"
+            )
         )
     
     user_id = str(uuid.uuid4())
@@ -132,7 +135,14 @@ async def register(
         is_admin=register_data.is_admin
     )
     db.add(new_user)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username or email already registered",
+        ) from exc
     
     role = "admin" if register_data.is_admin else "agent"
     token = create_access_token(

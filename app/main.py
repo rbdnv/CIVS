@@ -1,19 +1,34 @@
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
+
+from app.api.demo_routes import demo_api_router, demo_page_router
 from app.api.routes import router
 from app.config import get_settings
-import traceback
+from app.db.database import init_db
 
 settings = get_settings()
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await init_db()
+    yield
 
 app = FastAPI(
     title="CIVS - Context Integrity Verification System",
     description="Система верификации целостности контекста для защиты ИИ-агентов от Memory Injection атак",
-    version="1.0.0",
+    version="1.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -23,6 +38,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.exception_handler(RequestValidationError)
@@ -58,12 +75,15 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 app.include_router(router)
+app.include_router(demo_page_router)
+app.include_router(demo_api_router)
 
 
 @app.get("/")
 async def root():
     return {
         "message": "CIVS - Context Integrity Verification System",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "docs": "/docs",
+        "demo": "/demo/compare",
     }
