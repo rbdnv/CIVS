@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 
-from app.api.demo_routes import demo_api_router, demo_page_router
+from app.api.demo_routes import demo_api_router, demo_page_router, live_demo_api_router
 from app.api.routes import router
 from app.config import get_settings
 from app.db.database import init_db
@@ -77,6 +77,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 app.include_router(router)
 app.include_router(demo_page_router)
 app.include_router(demo_api_router)
+app.include_router(live_demo_api_router)
 
 
 @app.get("/")
@@ -86,4 +87,5 @@ async def root():
         "version": "1.1.0",
         "docs": "/docs",
         "demo": "/demo/compare",
+        "live_demo": "/demo/live-compare",
     }

@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     
     # Replay attack window (seconds)
     REPLAY_WINDOW_SECONDS: int = 30
+
+    # OpenAI live demo settings
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-4.1-mini"
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_TIMEOUT_SECONDS: float = 30.0
+    OPENAI_MAX_OUTPUT_TOKENS: int = 160
     
 @lru_cache()
 def get_settings() -> Settings:

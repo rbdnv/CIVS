@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CIVS Live LLM Demo</title>
+  <link rel="stylesheet" href="/static/live_demo/compare.css">
+</head>
+<body>
+  <div class="shell live-shell">
+    <section class="hero">
+      <span class="eyebrow">Live Demo • OpenAI Responses API</span>
+      <h1>Один и тот же attack payload против реального LLM-агента.</h1>
+      <p class="hero-copy">
+        На этой странице обе дорожки обращаются к настоящей языковой модели. Разница только в том,
+        что справа перед записью в память стоит CIVS: suspicious-content check, подпись, hash-chain
+        и trust score. Слева вредоносная memory-инъекция доходит до модели напрямую.
+      </p>
+      <div class="hero-actions">
+        <button class="primary" onclick="runFullLiveDemo()">Запустить live-сценарий</button>
+        <button class="safe" onclick="applyLiveSafe()">Добавить безопасный контекст</button>
+        <button class="danger" onclick="applyLiveAttack()">Попробовать memory injection</button>
+        <button class="ghost" onclick="resetLiveDemo()">Сбросить</button>
+      </div>
+      <p class="live-note">
+        Для работы страницы нужен `OPENAI_API_KEY` в `.env`. Если ключ не задан, страница останется
+        доступной, но не будет отправлять запросы в модель.
+      </p>
+    </section>
+
+    <section class="status-banner" id="statusBanner"></section>
+    <section class="overview" id="overview"></section>
+
+    <section class="layout">
+      <div class="compare-grid">
+        <section class="panel lane lane-danger" id="vulnerableLane"></section>
+        <section class="panel lane lane-safe" id="protectedLane"></section>
+      </div>
+
+      <aside class="panel">
+        <div class="control-grid">
+          <div>
+            <label for="contextInput">Memory chunk для обеих дорожек</label>
+            <textarea id="contextInput"></textarea>
+            <p class="hint">
+              Один и тот же контекст отправляется и уязвимому агенту, и агенту с CIVS.
+            </p>
+          </div>
+
+          <div class="control-actions">
+            <button class="primary" onclick="submitLiveContext()">Отправить контекст</button>
+            <button class="ghost" onclick="fillLiveSafeExample()">Подставить безопасный пример</button>
+            <button class="ghost" onclick="fillLiveAttackExample()">Подставить вредоносный пример</button>
+          </div>
+
+          <div>
+            <label for="questionInput">Вопрос реальному LLM после записи в память</label>
+            <input id="questionInput" />
+            <p class="hint">
+              Самый наглядный сценарий: сначала атакующий context, затем обычный вопрос вроде
+              “Explain Python in one sentence”.
+            </p>
+          </div>
+
+          <div class="control-actions">
+            <button class="primary" onclick="askLiveQuestion()">Задать вопрос LLM</button>
+            <a class="ghost" href="/demo/compare">Открыть scripted demo</a>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="panel panel-spaced">
+      <div class="lane-header architecture-header">
+        <div>
+          <h2 class="lane-title">Журнал live-событий</h2>
+          <p class="lane-subtitle">
+            Здесь фиксируется, как один и тот же контекст влияет на реальные LLM-вызовы.
+          </p>
+        </div>
+      </div>
+      <div class="events-list" id="eventsList"></div>
+    </section>
+
+    <section class="panel panel-spaced">
+      <div class="lane-header architecture-header">
+        <div>
+          <h2 class="lane-title">Как читать результат</h2>
+          <p class="lane-subtitle">
+            Комиссии проще всего показать три вещи: какой payload был отправлен, дошёл ли он до памяти,
+            и какой реальный ответ вернула модель в каждой дорожке.
+          </p>
+        </div>
+      </div>
+      <div class="detail-list" id="detailsGrid"></div>
+    </section>
+  </div>
+
+  <script src="/static/live_demo/compare.js"></script>
+</body>
+</html>

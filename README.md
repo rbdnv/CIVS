@@ -29,6 +29,12 @@ http://localhost:8000/docs
 ### 4. Открыть интерактивную демонстрацию
 http://localhost:8000/demo/compare
 
+### 5. Открыть live LLM-демонстрацию
+http://localhost:8000/demo/live-compare
+
+Для live-режима добавьте в `.env` переменную `OPENAI_API_KEY`. По умолчанию используется
+модель `gpt-4.1-mini`, но её можно поменять через `OPENAI_MODEL`.
+
 ## CI
 
 В репозитории настроен GitHub Actions workflow [`.github/workflows/ci.yml`](/home/said/project/.github/workflows/ci.yml).
@@ -71,6 +77,7 @@ civs/
 │   ├── core/
 │   │   ├── crypto.py        # Криптография
 │   │   ├── demo_simulation.py # Логика сравнения "Без CIVS / С CIVS"
+│   │   ├── live_llm_demo.py # Live-сценарий с реальным LLM через OpenAI API
 │   │   ├── verifier.py      # Trust Score
 │   │   └── security.py      # Защита от атак
 │   ├── db/
@@ -79,10 +86,12 @@ civs/
 │   └── models/
 │       └── context.py       # Pydantic модели
 │   └── static/demo/         # HTML/CSS/JS демонстрации
+│   └── static/live_demo/    # Live HTML/CSS/JS демонстрации с реальным LLM
 ├── tests/
 │   ├── test_core.py         # Core unit-тесты
 │   ├── test_auth.py         # Auth unit-тесты
-│   └── test_demo_simulation.py # Demo flow unit-тесты
+│   ├── test_demo_simulation.py # Demo flow unit-тесты
+│   └── test_live_llm_demo.py # Live LLM demo unit-тесты
 ├── docker-compose.yml      # PostgreSQL
 ├── demo.py                 # Базовый демо
 ├── demo_agent_vulnerable.py # Консольный сценарий без защиты
