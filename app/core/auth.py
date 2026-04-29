@@ -10,7 +10,14 @@ from app.core.time_utils import utc_now
 
 settings = get_settings()
 
-security = HTTPBearer()
+security = HTTPBearer(
+    scheme_name="BearerAuth",
+    bearerFormat="JWT",
+    description=(
+        "JWT access token в формате `Authorization: Bearer <token>`. "
+        "Токен можно получить через `/api/v1/auth/login` или `/api/v1/auth/register`."
+    ),
+)
 
 
 def hash_password(password: str) -> str:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,7 @@ import uuid
 from app.db.database import get_db
 from app.config import get_settings
 from app.core.time_utils import utc_now, utc_now_iso
+from app.models.auth import LoginRequest, LoginResponse, RegisterRequest
 from app.models.context import (
     ContextCreate,
     ContextResponse,
@@ -42,26 +43,127 @@ from app.core.auth import (
 
 router = APIRouter(prefix="/api/v1")
 
-class LoginRequest(BaseModel):
-    model_config = ConfigDict(
-        title="LoginRequest",
-        json_schema_extra={
+VALIDATION_ERROR_RESPONSE = {
+    "description": "Ошибка валидации входных данных",
+    "content": {
+        "application/json": {
             "example": {
-                "username": "demo-user",
-                "password": "secret123",
+                "error": "Validation Error",
+                "details": [
+                    {
+                        "field": "body.private_key",
+                        "message": "Field required",
+                        "type": "missing",
+                    }
+                ],
+                "hint": "Проверьте формат входных данных. Для private_key используйте полный PEM формат с переносами строк.",
             }
-        },
-    )
+        }
+    },
+}
 
-    username: str = Field(..., description="Имя пользователя, зарегистрированное в системе.")
-    password: str = Field(..., description="Пароль пользователя для получения JWT-токена.")
+UNAUTHORIZED_RESPONSE = {
+    "model": ErrorResponse,
+    "description": "Требуется валидный Bearer JWT токен",
+    "content": {
+        "application/json": {
+            "example": {
+                "detail": "Could not validate credentials",
+            }
+        }
+    },
+}
 
+FORBIDDEN_RESPONSE = {
+    "model": ErrorResponse,
+    "description": "Доступ запрещён из-за ограничений RBAC",
+    "content": {
+        "application/json": {
+            "example": {
+                "detail": "Access denied: can only access your own contexts",
+            }
+        }
+    },
+}
 
-class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user_id: str
-    role: str
+ADMIN_FORBIDDEN_RESPONSE = {
+    "model": ErrorResponse,
+    "description": "Операция доступна только администраторам",
+    "content": {
+        "application/json": {
+            "example": {
+                "detail": "Admin privileges required",
+            }
+        }
+    },
+}
+
+CONTEXT_NOT_FOUND_RESPONSE = {
+    "model": ErrorResponse,
+    "description": "Контекст с указанным ID не найден",
+    "content": {
+        "application/json": {
+            "example": {
+                "detail": "Context not found",
+            }
+        }
+    },
+}
+
+REGISTER_BAD_REQUEST_RESPONSE = {
+    "model": ErrorResponse,
+    "description": "Пользователь с таким username или email уже существует",
+    "content": {
+        "application/json": {
+            "examples": {
+                "duplicate_username": {
+                    "summary": "Занятый username",
+                    "value": {"detail": "Username already registered"},
+                },
+                "duplicate_email": {
+                    "summary": "Занятый email",
+                    "value": {"detail": "Email already registered"},
+                },
+            }
+        }
+    },
+}
+
+LOGIN_UNAUTHORIZED_RESPONSE = {
+    "model": ErrorResponse,
+    "description": "Неверное имя пользователя или пароль",
+    "content": {
+        "application/json": {
+            "example": {
+                "detail": "Incorrect username or password",
+            }
+        }
+    },
+}
+
+LOGIN_FORBIDDEN_RESPONSE = {
+    "model": ErrorResponse,
+    "description": "Учётная запись отключена",
+    "content": {
+        "application/json": {
+            "example": {
+                "detail": "User account is disabled",
+            }
+        }
+    },
+}
+
+CONTENT_REQUIRED_RESPONSE = {
+    "model": ErrorResponse,
+    "description": "Не передан обязательный параметр content",
+    "content": {
+        "application/json": {
+            "example": {
+                "detail": "content is required",
+            }
+        }
+    },
+}
 
 
 @router.post(
@@ -73,6 +175,11 @@ class LoginResponse(BaseModel):
         "Проверяет учётные данные пользователя и возвращает JWT-токен для дальнейшей "
         "аутентификации в защищённых ручках API."
     ),
+    responses={
+        401: LOGIN_UNAUTHORIZED_RESPONSE,
+        403: LOGIN_FORBIDDEN_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
 )
 async def login(
     login_data: LoginRequest,
@@ -112,23 +219,6 @@ async def login(
     )
 
 
-class RegisterRequest(BaseModel):
-    model_config = ConfigDict(
-        title="RegisterRequest",
-        json_schema_extra={
-            "example": {
-                "username": "demo-user",
-                "password": "secret123",
-                "email": "demo-user@example.com",
-            }
-        },
-    )
-
-    username: str = Field(..., description="Желаемое уникальное имя пользователя.")
-    password: str = Field(..., description="Пароль нового пользователя.")
-    email: str = Field(..., description="Уникальный email пользователя.")
-
-
 @router.post(
     "/auth/register",
     response_model=LoginResponse,
@@ -138,6 +228,10 @@ class RegisterRequest(BaseModel):
         "Создаёт нового публичного пользователя с ролью `agent` и сразу возвращает JWT-токен. "
         "Назначение роли `admin` через эту ручку недоступно."
     ),
+    responses={
+        400: REGISTER_BAD_REQUEST_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
 )
 async def register(
     register_data: RegisterRequest,
@@ -221,6 +315,9 @@ async def health_check():
         "Создаёт новую пару ключей Ed25519 в PEM-формате. Приватный ключ используется для подписи "
         "контекстов, публичный — для последующей проверки подписи."
     ),
+    responses={
+        422: VALIDATION_ERROR_RESPONSE,
+    },
 )
 async def generate_key_pair():
     """
@@ -243,6 +340,10 @@ async def generate_key_pair():
         "подписывает запись приватным ключом. Используется для записи памяти или служебного "
         "контекста агента."
     ),
+    responses={
+        401: UNAUTHORIZED_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
 )
 async def create_context(
     context_data: ContextCreate,
@@ -358,6 +459,12 @@ async def create_context(
         "Выполняет комплексную проверку сохранённого контекста: подпись, hash-chain, признаки "
         "tampering и replay, после чего рассчитывает trust score и итоговую классификацию."
     ),
+    responses={
+        401: UNAUTHORIZED_RESPONSE,
+        403: FORBIDDEN_RESPONSE,
+        404: CONTEXT_NOT_FOUND_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
 )
 async def verify_context(
     verify_request: ContextVerifyRequest,
@@ -483,6 +590,12 @@ async def verify_context(
     tags=["contexts"],
     summary="Получить контекст по идентификатору",
     description="Возвращает одну запись контекста по её ID. Для agent-доступа действует ограничение на чтение только собственных контекстов.",
+    responses={
+        401: UNAUTHORIZED_RESPONSE,
+        403: FORBIDDEN_RESPONSE,
+        404: CONTEXT_NOT_FOUND_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
 )
 async def get_context(
     context_id: str,
@@ -515,6 +628,10 @@ async def get_context(
         "Возвращает список контекстов с поддержкой фильтрации по пользователю и сессии. "
         "Обычный agent видит только свои записи, admin может просматривать больше данных."
     ),
+    responses={
+        401: UNAUTHORIZED_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
 )
 async def list_contexts(
     user_id: Optional[str] = Query(default=None),
@@ -553,6 +670,11 @@ async def list_contexts(
         "Возвращает журнал действий в системе: создание и проверка контекстов, связанные "
         "операции и служебные события. Доступно только администраторам."
     ),
+    responses={
+        401: UNAUTHORIZED_RESPONSE,
+        403: ADMIN_FORBIDDEN_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
 )
 async def list_audit_logs(
     user_id: Optional[str] = Query(default=None),
@@ -599,6 +721,10 @@ class CheckContentSecurityRequest(BaseModel):
         "Проверяет входной текст на шаблоны prompt injection, memory poisoning, script injection "
         "и command injection. Удобно использовать как быстрый pre-check перед записью контента."
     ),
+    responses={
+        400: CONTENT_REQUIRED_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
 )
 async def check_content_security(
     request: CheckContentSecurityRequest = None,
@@ -639,6 +765,10 @@ async def check_content_security(
         "Анализирует содержимое файла перед использованием в RAG: считает hash, ищет подозрительные "
         "паттерны и возвращает trust score с итоговой классификацией."
     ),
+    responses={
+        401: UNAUTHORIZED_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
 )
 async def verify_file_for_rag(
     file_data: FileVerifyRequest,

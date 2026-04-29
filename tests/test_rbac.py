@@ -5,8 +5,9 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from fastapi import HTTPException
 
-from app.api.routes import ContextVerifyRequest, RegisterRequest, register, verify_context
+from app.api.routes import ContextVerifyRequest, register, verify_context
 from app.core.auth import decode_token
+from app.models.auth import RegisterRequest
 
 
 class ScalarResult:

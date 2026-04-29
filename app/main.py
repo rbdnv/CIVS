@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -79,6 +80,33 @@ app.include_router(router)
 app.include_router(demo_page_router)
 app.include_router(demo_api_router)
 app.include_router(live_demo_api_router)
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    security_schemes = openapi_schema.setdefault("components", {}).setdefault("securitySchemes", {})
+    bearer_auth = security_schemes.get("BearerAuth")
+    if bearer_auth:
+        bearer_auth["description"] = (
+            "Используйте JWT access token в заголовке `Authorization: Bearer <token>`. "
+            "Получить токен можно через `/api/v1/auth/login` или сразу после "
+            "регистрации через `/api/v1/auth/register`."
+        )
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 
 @app.get("/", tags=["system"], summary="Получить краткую информацию об API")

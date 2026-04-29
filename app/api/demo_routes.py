@@ -6,11 +6,48 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.demo_simulation import demo_simulation_service
 from app.core.live_llm_demo import live_llm_demo_service
+from app.models.context import ErrorResponse
 
 
 demo_page_router = APIRouter(include_in_schema=False)
 demo_api_router = APIRouter(prefix="/api/v1/demo", tags=["demo"])
 live_demo_api_router = APIRouter(prefix="/api/v1/live-demo", tags=["live-demo"])
+
+DEMO_NOT_FOUND_RESPONSE = {
+    "model": ErrorResponse,
+    "description": "Demo-сессия с указанным ID не найдена",
+    "content": {
+        "application/json": {
+            "example": {
+                "detail": "Demo session not found",
+            }
+        }
+    },
+}
+
+LIVE_DEMO_NOT_FOUND_RESPONSE = {
+    "model": ErrorResponse,
+    "description": "Live demo-сессия с указанным ID не найдена",
+    "content": {
+        "application/json": {
+            "example": {
+                "detail": "Live demo session not found",
+            }
+        }
+    },
+}
+
+LIVE_DEMO_UNAVAILABLE_RESPONSE = {
+    "model": ErrorResponse,
+    "description": "Live demo недоступен из-за отсутствия конфигурации модели",
+    "content": {
+        "application/json": {
+            "example": {
+                "detail": "OPENAI_API_KEY is not configured",
+            }
+        }
+    },
+}
 
 DEMO_STATIC_DIR = Path(__file__).resolve().parents[1] / "static" / "demo"
 DEMO_PAGE_PATH = DEMO_STATIC_DIR / "compare.html"
@@ -69,6 +106,7 @@ async def create_demo_session():
     "/session/{session_id}",
     summary="Получить состояние demo-сессии",
     description="Возвращает текущее состояние demo-сессии: память агентов, события, последний ответ и статус защищённой/уязвимой ветки.",
+    responses={404: DEMO_NOT_FOUND_RESPONSE},
 )
 async def get_demo_session(session_id: str):
     try:
@@ -81,6 +119,7 @@ async def get_demo_session(session_id: str):
     "/session/{session_id}/reset",
     summary="Сбросить demo-сессию",
     description="Очищает память, перевыпускает ключи и возвращает demo-сессию в исходное состояние.",
+    responses={404: DEMO_NOT_FOUND_RESPONSE},
 )
 async def reset_demo_session(session_id: str):
     try:
@@ -93,6 +132,7 @@ async def reset_demo_session(session_id: str):
     "/session/{session_id}/memory",
     summary="Добавить контекст в demo-память",
     description="Подаёт новый контекст в demo-сценарий и показывает, как он попадёт в память без защиты и как будет обработан в ветке с CIVS.",
+    responses={404: DEMO_NOT_FOUND_RESPONSE},
 )
 async def submit_demo_memory(session_id: str, request: DemoMemoryRequest):
     try:
@@ -109,6 +149,7 @@ async def submit_demo_memory(session_id: str, request: DemoMemoryRequest):
     "/session/{session_id}/query",
     summary="Отправить вопрос demo-агенту",
     description="Отправляет пользовательский вопрос обеим demo-веткам и возвращает сравнительный результат ответа.",
+    responses={404: DEMO_NOT_FOUND_RESPONSE},
 )
 async def ask_demo_question(session_id: str, request: DemoQuestionRequest):
     try:
@@ -139,6 +180,7 @@ async def create_live_demo_session():
     "/session/{session_id}",
     summary="Получить состояние live demo-сессии",
     description="Возвращает состояние live demo-сессии: память, ответы модели, статус проверки и журнал событий.",
+    responses={404: LIVE_DEMO_NOT_FOUND_RESPONSE},
 )
 async def get_live_demo_session(session_id: str):
     try:
@@ -151,6 +193,7 @@ async def get_live_demo_session(session_id: str):
     "/session/{session_id}/reset",
     summary="Сбросить live demo-сессию",
     description="Очищает текущее состояние live demo и подготавливает новую попытку сравнения без создания новой сессии.",
+    responses={404: LIVE_DEMO_NOT_FOUND_RESPONSE},
 )
 async def reset_live_demo_session(session_id: str):
     try:
@@ -163,6 +206,7 @@ async def reset_live_demo_session(session_id: str):
     "/session/{session_id}/memory",
     summary="Добавить контекст в live demo-память",
     description="Добавляет контекст в live demo и показывает, дойдёт ли он до реальной LLM в защищённой и уязвимой ветках.",
+    responses={404: LIVE_DEMO_NOT_FOUND_RESPONSE},
 )
 async def submit_live_demo_memory(session_id: str, request: DemoMemoryRequest):
     try:
@@ -179,6 +223,7 @@ async def submit_live_demo_memory(session_id: str, request: DemoMemoryRequest):
     "/session/{session_id}/query",
     summary="Отправить вопрос live demo-агенту",
     description="Отправляет вопрос реальной LLM в обеих ветках и возвращает сравнительный результат вместе с метаданными вызова модели.",
+    responses={404: LIVE_DEMO_NOT_FOUND_RESPONSE, 503: LIVE_DEMO_UNAVAILABLE_RESPONSE},
 )
 async def ask_live_demo_question(session_id: str, request: DemoQuestionRequest):
     try:
