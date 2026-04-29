@@ -40,7 +40,7 @@ from app.core.auth import (
     verify_password,
 )
 
-router = APIRouter(prefix="/api/v1", tags=["context"])
+router = APIRouter(prefix="/api/v1")
 
 class LoginRequest(BaseModel):
     username: str
@@ -54,7 +54,12 @@ class LoginResponse(BaseModel):
     role: str
 
 
-@router.post("/auth/login", response_model=LoginResponse)
+@router.post(
+    "/auth/login",
+    response_model=LoginResponse,
+    tags=["auth"],
+    summary="Войти в систему и получить JWT",
+)
 async def login(
     login_data: LoginRequest,
     db: AsyncSession = Depends(get_db),
@@ -99,7 +104,12 @@ class RegisterRequest(BaseModel):
     email: str
 
 
-@router.post("/auth/register", response_model=LoginResponse)
+@router.post(
+    "/auth/register",
+    response_model=LoginResponse,
+    tags=["auth"],
+    summary="Зарегистрировать нового пользователя",
+)
 async def register(
     register_data: RegisterRequest,
     db: AsyncSession = Depends(get_db),
@@ -157,7 +167,12 @@ async def register(
     )
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get(
+    "/health",
+    response_model=HealthResponse,
+    tags=["system"],
+    summary="Проверить состояние API и базы данных",
+)
 async def health_check():
     """Проверка здоровья системы"""
     return HealthResponse(
@@ -167,7 +182,12 @@ async def health_check():
     )
 
 
-@router.post("/keys/generate", response_model=KeyPairResponse)
+@router.post(
+    "/keys/generate",
+    response_model=KeyPairResponse,
+    tags=["keys"],
+    summary="Сгенерировать пару ключей Ed25519",
+)
 async def generate_key_pair():
     """
     Генерирует пару ключей Ed25519 для подписи контекстов
@@ -178,7 +198,13 @@ async def generate_key_pair():
     return KeyPairResponse(private_key=private_key, public_key=public_key)
 
 
-@router.post("/contexts", response_model=ContextResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/contexts",
+    response_model=ContextResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["contexts"],
+    summary="Создать новый контекст агента",
+)
 async def create_context(
     context_data: ContextCreate,
     db: AsyncSession = Depends(get_db),
@@ -284,7 +310,12 @@ async def create_context(
     return new_context
 
 
-@router.post("/contexts/verify", response_model=ContextVerifyResponse)
+@router.post(
+    "/contexts/verify",
+    response_model=ContextVerifyResponse,
+    tags=["contexts"],
+    summary="Проверить целостность и доверие к контексту",
+)
 async def verify_context(
     verify_request: ContextVerifyRequest,
     db: AsyncSession = Depends(get_db),
@@ -403,7 +434,12 @@ async def verify_context(
     )
 
 
-@router.get("/contexts/{context_id}", response_model=ContextResponse)
+@router.get(
+    "/contexts/{context_id}",
+    response_model=ContextResponse,
+    tags=["contexts"],
+    summary="Получить контекст по идентификатору",
+)
 async def get_context(
     context_id: str,
     db: AsyncSession = Depends(get_db),
@@ -426,7 +462,12 @@ async def get_context(
     return context
 
 
-@router.get("/contexts", response_model=List[ContextResponse])
+@router.get(
+    "/contexts",
+    response_model=List[ContextResponse],
+    tags=["contexts"],
+    summary="Получить список контекстов с фильтрацией",
+)
 async def list_contexts(
     user_id: Optional[str] = Query(default=None),
     session_id: Optional[str] = Query(default=None),
@@ -455,7 +496,12 @@ async def list_contexts(
     return contexts
 
 
-@router.get("/audit/logs", response_model=List[AuditLogResponse])
+@router.get(
+    "/audit/logs",
+    response_model=List[AuditLogResponse],
+    tags=["audit"],
+    summary="Просмотреть журнал аудита",
+)
 async def list_audit_logs(
     user_id: Optional[str] = Query(default=None),
     action: Optional[str] = Query(default=None),
@@ -487,7 +533,11 @@ class ContentCheckRequest(BaseModel):
     content: str
 
 
-@router.post("/security/check-content")
+@router.post(
+    "/security/check-content",
+    tags=["security"],
+    summary="Проверить текст на признаки injection-атак",
+)
 async def check_content_security(
     request: ContentCheckRequest = None,
     content: str = Query(None, description="Контент для проверки"),
@@ -518,7 +568,12 @@ async def check_content_security(
     }
 
 
-@router.post("/rag/verify-file", response_model=FileVerifyResponse)
+@router.post(
+    "/rag/verify-file",
+    response_model=FileVerifyResponse,
+    tags=["rag"],
+    summary="Проверить файл перед загрузкой в RAG",
+)
 async def verify_file_for_rag(
     file_data: FileVerifyRequest,
     db: AsyncSession = Depends(get_db),

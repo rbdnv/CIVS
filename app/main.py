@@ -81,7 +81,7 @@ app.include_router(demo_api_router)
 app.include_router(live_demo_api_router)
 
 
-@app.get("/")
+@app.get("/", tags=["system"], summary="Получить краткую информацию об API")
 async def root():
     return {
         "message": "CIVS - Context Integrity Verification System",

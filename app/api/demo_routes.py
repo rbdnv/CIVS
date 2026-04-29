@@ -37,12 +37,12 @@ async def live_compare_demo_page() -> FileResponse:
     return FileResponse(LIVE_DEMO_PAGE_PATH)
 
 
-@demo_api_router.post("/session")
+@demo_api_router.post("/session", summary="Создать demo-сессию сравнения")
 async def create_demo_session():
     return demo_simulation_service.create_session()
 
 
-@demo_api_router.get("/session/{session_id}")
+@demo_api_router.get("/session/{session_id}", summary="Получить состояние demo-сессии")
 async def get_demo_session(session_id: str):
     try:
         return demo_simulation_service.snapshot(session_id)
@@ -50,7 +50,7 @@ async def get_demo_session(session_id: str):
         raise HTTPException(status_code=404, detail="Demo session not found") from exc
 
 
-@demo_api_router.post("/session/{session_id}/reset")
+@demo_api_router.post("/session/{session_id}/reset", summary="Сбросить demo-сессию")
 async def reset_demo_session(session_id: str):
     try:
         return demo_simulation_service.reset_session(session_id)
@@ -58,7 +58,7 @@ async def reset_demo_session(session_id: str):
         raise HTTPException(status_code=404, detail="Demo session not found") from exc
 
 
-@demo_api_router.post("/session/{session_id}/memory")
+@demo_api_router.post("/session/{session_id}/memory", summary="Добавить контекст в demo-память")
 async def submit_demo_memory(session_id: str, request: DemoMemoryRequest):
     try:
         return await demo_simulation_service.submit_memory(
@@ -70,7 +70,7 @@ async def submit_demo_memory(session_id: str, request: DemoMemoryRequest):
         raise HTTPException(status_code=404, detail="Demo session not found") from exc
 
 
-@demo_api_router.post("/session/{session_id}/query")
+@demo_api_router.post("/session/{session_id}/query", summary="Отправить вопрос demo-агенту")
 async def ask_demo_question(session_id: str, request: DemoQuestionRequest):
     try:
         return demo_simulation_service.ask_agent(session_id, request.question)
@@ -78,17 +78,17 @@ async def ask_demo_question(session_id: str, request: DemoQuestionRequest):
         raise HTTPException(status_code=404, detail="Demo session not found") from exc
 
 
-@live_demo_api_router.get("/status")
+@live_demo_api_router.get("/status", summary="Проверить готовность live LLM demo")
 async def get_live_demo_status():
     return live_llm_demo_service.status()
 
 
-@live_demo_api_router.post("/session")
+@live_demo_api_router.post("/session", summary="Создать live demo-сессию")
 async def create_live_demo_session():
     return live_llm_demo_service.create_session()
 
 
-@live_demo_api_router.get("/session/{session_id}")
+@live_demo_api_router.get("/session/{session_id}", summary="Получить состояние live demo-сессии")
 async def get_live_demo_session(session_id: str):
     try:
         return live_llm_demo_service.snapshot(session_id)
@@ -96,7 +96,7 @@ async def get_live_demo_session(session_id: str):
         raise HTTPException(status_code=404, detail="Live demo session not found") from exc
 
 
-@live_demo_api_router.post("/session/{session_id}/reset")
+@live_demo_api_router.post("/session/{session_id}/reset", summary="Сбросить live demo-сессию")
 async def reset_live_demo_session(session_id: str):
     try:
         return live_llm_demo_service.reset_session(session_id)
@@ -104,7 +104,7 @@ async def reset_live_demo_session(session_id: str):
         raise HTTPException(status_code=404, detail="Live demo session not found") from exc
 
 
-@live_demo_api_router.post("/session/{session_id}/memory")
+@live_demo_api_router.post("/session/{session_id}/memory", summary="Добавить контекст в live demo-память")
 async def submit_live_demo_memory(session_id: str, request: DemoMemoryRequest):
     try:
         return await live_llm_demo_service.submit_memory(
@@ -116,7 +116,7 @@ async def submit_live_demo_memory(session_id: str, request: DemoMemoryRequest):
         raise HTTPException(status_code=404, detail="Live demo session not found") from exc
 
 
-@live_demo_api_router.post("/session/{session_id}/query")
+@live_demo_api_router.post("/session/{session_id}/query", summary="Отправить вопрос live demo-агенту")
 async def ask_live_demo_question(session_id: str, request: DemoQuestionRequest):
     try:
         return await live_llm_demo_service.ask_agent(session_id, request.question)
