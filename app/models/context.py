@@ -4,22 +4,38 @@ from datetime import datetime
 from app.core.time_utils import utc_now
 
 
-class ContextCreate(BaseModel):
+class CreateContextRequest(BaseModel):
     """Модель для создания контекста"""
-    content: str = Field(..., description="Содержимое контекста")
-    content_hash: Optional[str] = None
-    previous_hash: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    context_type: str = "general"
-    priority: int = 0
-    flags: Optional[Dict[str, Any]] = None
-    data_source_id: Optional[str] = None
-    session_id: Optional[str] = None
-    parent_context_id: Optional[str] = None
+    model_config = ConfigDict(
+        title="CreateContextRequest",
+        json_schema_extra={
+            "example": {
+                "content": "User asked about Python. Assistant answered with a short explanation.",
+                "previous_hash": "4dbf488c560c8b4f8b2e9bdf2a2d1c0dcae7db52a5d5f0bc0d55a31f9b1f3c8a",
+                "metadata": {"source": "agent-memory", "lang": "en"},
+                "context_type": "conversation",
+                "priority": 5,
+                "flags": {"trusted_input": True},
+                "session_id": "session-123",
+                "sign": False,
+            }
+        },
+    )
+
+    content: str = Field(..., description="Основное текстовое содержимое контекста, которое будет сохранено в память агента.")
+    content_hash: Optional[str] = Field(default=None, description="Опциональный внешний hash. Обычно не передаётся, так как система вычисляет его сама.")
+    previous_hash: Optional[str] = Field(default=None, description="Хеш предыдущего контекста в цепочке для контроля целостности истории.")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Произвольные метаданные контекста: источник, язык, внешние идентификаторы и т.д.")
+    context_type: str = Field(default="general", description="Тип контекста, например `general`, `conversation`, `instruction`, `memory`.")
+    priority: int = Field(default=0, description="Приоритет контекста. Может использоваться для сортировки или отбора более важных записей.")
+    flags: Optional[Dict[str, Any]] = Field(default=None, description="Флаги обработки контекста, например признак доверенного источника.")
+    data_source_id: Optional[str] = Field(default=None, description="Идентификатор источника данных, если контекст связан с внешним DataSource.")
+    session_id: Optional[str] = Field(default=None, description="Идентификатор сессии, к которой относится контекст.")
+    parent_context_id: Optional[str] = Field(default=None, description="Идентификатор родительского контекста для древовидных или связанных записей.")
     
     # Для подписи
-    sign: bool = Field(default=False, description="Подписать контекст")
-    private_key: Optional[str] = None
+    sign: bool = Field(default=False, description="Нужно ли подписывать контекст приватным ключом Ed25519 перед сохранением.")
+    private_key: Optional[str] = Field(default=None, description="PEM-строка приватного ключа Ed25519. Используется только если `sign=true`.")
 
 
 class ContextResponse(BaseModel):
@@ -52,11 +68,22 @@ class ContextResponse(BaseModel):
     created_at: datetime
     verified_at: Optional[datetime]
     
-class ContextVerifyRequest(BaseModel):
+class VerifyContextRequest(BaseModel):
     """Запрос на верификацию контекста"""
-    context_id: str = Field(..., description="ID контекста для верификации")
-    check_tampering: bool = True
-    check_replay: bool = True
+    model_config = ConfigDict(
+        title="VerifyContextRequest",
+        json_schema_extra={
+            "example": {
+                "context_id": "c8dbb5d4-5a46-41c5-97ef-3d2b35f64151",
+                "check_tampering": True,
+                "check_replay": True,
+            }
+        },
+    )
+
+    context_id: str = Field(..., description="Идентификатор ранее сохранённого контекста, который нужно проверить.")
+    check_tampering: bool = Field(default=True, description="Проверять ли, был ли изменён контент после сохранения.")
+    check_replay: bool = Field(default=True, description="Проверять ли, не является ли контекст слишком старым или повторно использованным.")
 
 
 class ContextVerifyResponse(BaseModel):
@@ -135,11 +162,22 @@ class ErrorResponse(BaseModel):
     timestamp: datetime = Field(default_factory=utc_now)
 
 
-class FileVerifyRequest(BaseModel):
+class VerifyRagFileRequest(BaseModel):
     """Запрос на верификацию файла для RAG"""
-    file_name: str
-    file_content: str
-    data_source_id: Optional[str] = None
+    model_config = ConfigDict(
+        title="VerifyRagFileRequest",
+        json_schema_extra={
+            "example": {
+                "file_name": "knowledge_base.md",
+                "file_content": "# Python\nPython is a high-level programming language.",
+                "data_source_id": None,
+            }
+        },
+    )
+
+    file_name: str = Field(..., description="Имя файла, под которым документ будет отображаться в системе и логах.")
+    file_content: str = Field(..., description="Полное текстовое содержимое файла, которое проверяется перед использованием в RAG.")
+    data_source_id: Optional[str] = Field(default=None, description="ID существующего источника данных. Если передан, система обновит его конфигурацию проверки.")
 
 
 class FileVerifyResponse(BaseModel):
@@ -152,3 +190,9 @@ class FileVerifyResponse(BaseModel):
     classification: str
     verification_details: Dict[str, Any]
     verified_at: datetime
+
+
+# Backward-compatible aliases for existing imports.
+ContextCreate = CreateContextRequest
+ContextVerifyRequest = VerifyContextRequest
+FileVerifyRequest = VerifyRagFileRequest
