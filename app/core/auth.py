@@ -88,6 +88,22 @@ async def get_current_admin(current_user: dict = Depends(get_current_user)) -> d
     return current_user
 
 
+def ensure_owner_or_admin(
+    current_user: dict,
+    owner_user_id: str,
+    detail: str = "Access denied: can only access your own contexts",
+) -> None:
+    """Разрешает доступ владельцу ресурса или администратору."""
+    if current_user.get("role") == "admin":
+        return
+
+    if current_user.get("user_id") != owner_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail,
+        )
+
+
 def require_role(required_role: str):
     """Проверка конкретной роли"""
     async def role_checker(current_user: dict = Depends(get_current_user)) -> dict:

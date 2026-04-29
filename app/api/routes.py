@@ -32,6 +32,7 @@ from app.core.verifier import verifier_service
 from app.core.security import security_service
 from app.core.auth import (
     create_access_token,
+    ensure_owner_or_admin,
     get_current_user,
     get_current_admin,
     hash_password,
@@ -311,6 +312,8 @@ async def verify_context(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Context not found"
         )
+
+    ensure_owner_or_admin(current_user, context.user_id)
     
     # Подготовка данных для верификации
     context_data = {
@@ -417,13 +420,8 @@ async def get_context(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Context not found"
         )
-    
-    # RBAC: Agent может читать только свои контексты
-    if current_user["role"] == "agent" and context.user_id != current_user["user_id"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: can only access your own contexts"
-        )
+
+    ensure_owner_or_admin(current_user, context.user_id)
     
     return context
 
