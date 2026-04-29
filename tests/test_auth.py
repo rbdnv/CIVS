@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import HTTPException
@@ -42,6 +42,7 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_register_rejects_duplicate_email(self):
         db = AsyncMock()
+        db.add = Mock()
         db.execute.return_value = ScalarResult(
             SimpleNamespace(username="existing-user", email="taken@example.com")
         )
@@ -60,3 +61,16 @@ class TestAuth:
         assert exc_info.value.detail == "Email already registered"
         db.add.assert_not_called()
         db.commit.assert_not_awaited()
+
+    def test_register_request_ignores_is_admin_field(self):
+        request = RegisterRequest(
+            username="new-user",
+            password="secret123",
+            email="new-user@example.com",
+            is_admin=True,
+        )
+
+        dumped = request.model_dump()
+
+        assert "is_admin" not in dumped
+        assert dumped["username"] == "new-user"

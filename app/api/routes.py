@@ -96,7 +96,6 @@ class RegisterRequest(BaseModel):
     username: str
     password: str
     email: str
-    is_admin: bool = False
 
 
 @router.post("/auth/register", response_model=LoginResponse)
@@ -104,7 +103,7 @@ async def register(
     register_data: RegisterRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Регистрация нового пользователя"""
+    """Публичная регистрация нового пользователя с ролью agent."""
     result = await db.execute(
         select(User).where(
             or_(
@@ -132,7 +131,7 @@ async def register(
         email=register_data.email,
         hashed_password=hash_password(register_data.password),
         is_active=True,
-        is_admin=register_data.is_admin
+        is_admin=False,
     )
     db.add(new_user)
     try:
@@ -144,7 +143,7 @@ async def register(
             detail="Username or email already registered",
         ) from exc
     
-    role = "admin" if register_data.is_admin else "agent"
+    role = "agent"
     token = create_access_token(
         data={"sub": user_id, "role": role},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
