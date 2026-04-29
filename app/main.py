@@ -19,7 +19,8 @@ STATIC_DIR = BASE_DIR / "static"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    await init_db()
+    if settings.AUTO_INIT_DB:
+        await init_db()
     yield
 
 app = FastAPI(

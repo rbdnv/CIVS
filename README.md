@@ -18,22 +18,50 @@
 docker compose up -d postgres
 ```
 
-### 2. Запуск API сервера
+### 2. Применить миграции схемы
+```bash
+alembic upgrade head
+```
+
+### 3. Запуск API сервера
 ```bash
 python -m uvicorn app.main:app --reload --port 8000
 ```
 
-### 3. Открыть документацию
+### 4. Открыть документацию
 http://localhost:8000/docs
 
-### 4. Открыть интерактивную демонстрацию
+### 5. Открыть интерактивную демонстрацию
 http://localhost:8000/demo/compare
 
-### 5. Открыть live LLM-демонстрацию
+### 6. Открыть live LLM-демонстрацию
 http://localhost:8000/demo/live-compare
 
 Для live-режима добавьте в `.env` переменную `OPENAI_API_KEY`. По умолчанию используется
 модель `gpt-4.1-mini`, но её можно поменять через `OPENAI_MODEL`.
+
+По умолчанию приложение ожидает, что схема БД уже поднята миграциями. Для одноразовых
+dev/demo окружений можно включить `AUTO_INIT_DB=true`, и тогда при старте сработает
+ORM-инициализация через `create_all()`. Для основной ветки разработки и CI используйте
+только Alembic.
+
+## Миграции
+
+Инициализация и обновление схемы выполняются через Alembic:
+
+```bash
+# применить все миграции
+alembic upgrade head
+
+# посмотреть текущую ревизию
+alembic current
+
+# откатиться на одну ревизию назад
+alembic downgrade -1
+```
+
+Baseline-миграция уже описывает текущую структуру `Base.metadata`, поэтому следующие
+изменения в таблицах можно вести воспроизводимо через новые ревизии.
 
 ## CI
 
@@ -93,6 +121,8 @@ civs/
 │   ├── test_demo_simulation.py # Demo flow unit-тесты
 │   └── test_live_llm_demo.py # Live LLM demo unit-тесты
 ├── docker-compose.yml      # PostgreSQL
+├── alembic.ini             # Конфигурация Alembic
+├── alembic/                # Миграции схемы БД
 ├── demo.py                 # Базовый демо
 ├── demo_agent_vulnerable.py # Консольный сценарий без защиты
 ├── demo_agent_protected.py  # Консольный сценарий с CIVS

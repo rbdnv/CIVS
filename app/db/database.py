@@ -1,5 +1,4 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import sessionmaker
 from app.config import get_settings
 from app.db.tables import Base
 
@@ -30,6 +29,13 @@ async def get_db():
 
 
 async def init_db():
+    """
+    Dev/demo helper that mirrors the ORM metadata into the database.
+
+    The production/default schema path is Alembic migrations via
+    `alembic upgrade head`. Keep this helper only for disposable local
+    environments where `AUTO_INIT_DB=true` is explicitly enabled.
+    """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

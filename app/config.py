@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
     DATABASE_URL: str = "postgresql+asyncpg://civs_user:civs_password@localhost:5432/civs_db"
+    AUTO_INIT_DB: bool = False
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
