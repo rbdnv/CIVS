@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any, Dict, List, Optional, Protocol
+from urllib.parse import urlparse
 import uuid
 
 import httpx
@@ -61,14 +62,47 @@ class OpenAIResponsesGateway:
     """Thin wrapper over the OpenAI Responses API for the live demo."""
 
     def __init__(self) -> None:
+        self.provider = settings.LLM_PROVIDER.strip().lower()
         self.api_key = settings.OPENAI_API_KEY
         self.base_url = settings.OPENAI_BASE_URL.rstrip("/")
         self.model = settings.OPENAI_MODEL
         self.timeout = settings.OPENAI_TIMEOUT_SECONDS
         self.max_output_tokens = settings.OPENAI_MAX_OUTPUT_TOKENS
+        self.provider_label = self._provider_label()
 
     def is_configured(self) -> bool:
-        return bool(self.api_key)
+        if self.provider == "ollama":
+            return bool(self.base_url and self.model)
+        return bool(self.api_key and self.base_url and self.model)
+
+    def missing_configuration_message(self) -> str:
+        if self.provider == "ollama":
+            return (
+                "Ollama live demo is not configured. "
+                "Set LLM_PROVIDER=ollama and OPENAI_BASE_URL to the local /v1 endpoint."
+            )
+        return (
+            "OpenAI live demo is not configured. "
+            "Set OPENAI_API_KEY and OPENAI_MODEL in .env."
+        )
+
+    def _auth_token(self) -> str:
+        if self.provider == "ollama":
+            return self.api_key or "ollama"
+        return self.api_key
+
+    def _provider_label(self) -> str:
+        if self.provider == "ollama":
+            return "Ollama OpenAI-compatible API"
+        if self.provider == "openai":
+            return "OpenAI Responses API"
+        return f"{self.provider} OpenAI-compatible API"
+
+    def endpoint_label(self) -> str:
+        parsed = urlparse(self.base_url)
+        if parsed.hostname:
+            return parsed.hostname
+        return self.base_url or "unknown"
 
     async def generate_reply(
         self,
@@ -76,7 +110,7 @@ class OpenAIResponsesGateway:
         question: str,
     ) -> LLMCallResult:
         if not self.is_configured():
-            raise RuntimeError("OPENAI_API_KEY is not configured")
+            raise RuntimeError(self.missing_configuration_message())
 
         memory_lines = [
             f"[{index}] {item['content']}"
@@ -107,7 +141,7 @@ class OpenAIResponsesGateway:
             "max_output_tokens": self.max_output_tokens,
         }
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {self._auth_token()}",
             "Content-Type": "application/json",
         }
 
@@ -178,18 +212,28 @@ class LiveLLMDemoService:
     def status(self) -> Dict[str, Any]:
         if isinstance(self.gateway, OpenAIResponsesGateway):
             enabled = self.gateway.is_configured()
-        else:
-            enabled = True
-        model = getattr(self.gateway, "model", "custom")
-        return {
-            "enabled": enabled,
-            "provider": "OpenAI Responses API",
-            "model": model,
-            "message": (
+            provider = self.gateway.provider_label
+            message = (
                 "Live demo is ready."
                 if enabled
-                else "Set OPENAI_API_KEY in .env to enable the live LLM demo."
-            ),
+                else self.gateway.missing_configuration_message()
+            )
+        else:
+            enabled = True
+            provider = getattr(self.gateway, "provider_label", "Custom LLM gateway")
+            message = "Live demo is ready."
+        model = getattr(self.gateway, "model", "custom")
+        endpoint = (
+            self.gateway.endpoint_label()
+            if isinstance(self.gateway, OpenAIResponsesGateway)
+            else getattr(self.gateway, "endpoint_label", "custom")
+        )
+        return {
+            "enabled": enabled,
+            "provider": provider,
+            "model": model,
+            "endpoint": endpoint,
+            "message": message,
         }
 
     def create_session(self) -> Dict[str, Any]:
@@ -383,7 +427,9 @@ class LiveLLMDemoService:
     async def ask_agent(self, session_id: str, question: str) -> Dict[str, Any]:
         session = self.get_session(session_id)
         if not self.status()["enabled"]:
-            raise RuntimeError("OPENAI_API_KEY is not configured")
+            if isinstance(self.gateway, OpenAIResponsesGateway):
+                raise RuntimeError(self.gateway.missing_configuration_message())
+            raise RuntimeError("Live demo gateway is not configured")
 
         session.updated_at = utc_now_iso()
         vulnerable_result, protected_result = await asyncio.gather(

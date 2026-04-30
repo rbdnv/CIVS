@@ -57,6 +57,28 @@ function formatUsage(usage) {
     .join("");
 }
 
+function providerVariant(provider) {
+  const normalized = String(provider || "").toLowerCase();
+  if (normalized.includes("ollama")) {
+    return "provider-ollama";
+  }
+  if (normalized.includes("openai")) {
+    return "provider-openai";
+  }
+  return "";
+}
+
+function providerNote(status) {
+  const provider = String(status?.provider || "").toLowerCase();
+  if (provider.includes("ollama")) {
+    return "Для работы страницы должен быть запущен локальный Ollama server и доступна выбранная модель.";
+  }
+  if (provider.includes("openai")) {
+    return "Для работы страницы нужен OPENAI_API_KEY в .env. Без него UI останется доступным, но вызовы к модели не выполнятся.";
+  }
+  return "Для работы страницы должен быть настроен совместимый LLM provider и доступна выбранная модель.";
+}
+
 async function fetchLiveStatus() {
   liveStatus = await liveApi("/api/v1/live-demo/status");
   renderStatus();
@@ -168,16 +190,40 @@ function delay(ms) {
 
 function renderStatus(overrideMessage = null) {
   const banner = document.getElementById("statusBanner");
+  const providerStrip = document.getElementById("providerStrip");
+  const liveNote = document.getElementById("liveNote");
   const enabled = Boolean(liveStatus?.enabled);
+  const provider = liveStatus?.provider || "unknown";
+  const model = liveStatus?.model || "unknown";
+  const endpoint = liveStatus?.endpoint || "unknown";
+  const variant = providerVariant(provider);
+  const readinessClass = enabled ? "is-ready" : "not-ready";
+  const readinessLabel = enabled ? "Ready" : "Not ready";
+
   banner.className = `status-banner ${enabled ? "live-ready" : "live-missing"}`;
   banner.innerHTML = `
     <div class="status-grid">
       <span class="chip ${enabled ? "chip-safe" : "chip-danger"}">${enabled ? "Live mode enabled" : "Live mode disabled"}</span>
-      <span class="chip">Provider: ${escapeHtml(liveStatus?.provider || "unknown")}</span>
-      <span class="chip">Model: ${escapeHtml(liveStatus?.model || "unknown")}</span>
+      <span class="chip">Provider: ${escapeHtml(provider)}</span>
+      <span class="chip">Model: ${escapeHtml(model)}</span>
+      <span class="chip">Endpoint: ${escapeHtml(endpoint)}</span>
     </div>
     <div>${escapeHtml(overrideMessage || liveStatus?.message || "")}</div>
   `;
+
+  providerStrip.innerHTML = `
+    <article class="provider-card ${variant}">
+      <div class="provider-topline">
+        <span class="provider-label">Live LLM Provider</span>
+        <span class="provider-ready ${readinessClass}">${readinessLabel}</span>
+      </div>
+      <div class="provider-value">${escapeHtml(provider)}</div>
+      <div class="provider-meta">Model: ${escapeHtml(model)}</div>
+      <div class="provider-meta">Endpoint: ${escapeHtml(endpoint)}</div>
+    </article>
+  `;
+
+  liveNote.textContent = providerNote(liveStatus);
 }
 
 function renderOverview() {

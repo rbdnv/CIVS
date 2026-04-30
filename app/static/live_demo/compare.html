@@ -16,16 +16,14 @@
         что справа перед записью в память стоит CIVS: suspicious-content check, подпись, hash-chain
         и trust score. Слева вредоносная memory-инъекция доходит до модели напрямую.
       </p>
+      <div class="provider-strip" id="providerStrip"></div>
       <div class="hero-actions">
         <button class="primary" onclick="runFullLiveDemo()">Запустить live-сценарий</button>
         <button class="safe" onclick="applyLiveSafe()">Добавить безопасный контекст</button>
         <button class="danger" onclick="applyLiveAttack()">Попробовать memory injection</button>
         <button class="ghost" onclick="resetLiveDemo()">Сбросить</button>
       </div>
-      <p class="live-note">
-        Для работы страницы нужен `OPENAI_API_KEY` в `.env`. Если ключ не задан, страница останется
-        доступной, но не будет отправлять запросы в модель.
-      </p>
+      <p class="live-note" id="liveNote"></p>
     </section>
 
     <section class="status-banner" id="statusBanner"></section>

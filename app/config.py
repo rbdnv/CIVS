@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     # Replay attack window (seconds)
     REPLAY_WINDOW_SECONDS: int = 30
 
-    # OpenAI live demo settings
+    # Live demo LLM provider settings
+    LLM_PROVIDER: str = "openai"
+    OLLAMA_BIN: str = "ollama"
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4.1-mini"
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
