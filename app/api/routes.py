@@ -360,6 +360,15 @@ async def create_context(
     3. Сохраняем в БД
     """
     user_id = current_user["user_id"]
+    actor_role = current_user.get("role", "agent")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    existing_user = result.scalar_one_or_none()
+    if not existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authenticated user not found",
+        )
 
     context_id = str(uuid.uuid4())
     created_at = utc_now()
@@ -400,20 +409,6 @@ async def create_context(
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         ).decode('utf-8')
     
-    # Создаем пользователя если не существует (для тестирования)
-    result = await db.execute(select(User).where(User.id == user_id))
-    existing_user = result.scalar_one_or_none()
-    if not existing_user:
-        new_user = User(
-            id=user_id,
-            username=user_id,
-            email=f"{user_id}@test.local",
-            hashed_password="hashed_password_placeholder",
-            is_active=True,
-            is_admin=False
-        )
-        db.add(new_user)
-    
     new_context = ContextRecord(
         id=context_id,
         user_id=user_id,
@@ -434,13 +429,16 @@ async def create_context(
     
     db.add(new_context)
     
-    # Логирование - user_id может быть None если пользователь не существует
     audit_log = AuditLog(
-        user_id=None,
+        user_id=user_id,
         action="create_context",
         resource_type="context",
         resource_id=context_id,
-        details={"content_hash": content_hash, "user_id": user_id},
+        details={
+            "content_hash": content_hash,
+            "actor_user_id": user_id,
+            "actor_role": actor_role,
+        },
     )
     db.add(audit_log)
     
@@ -557,11 +555,14 @@ async def verify_context(
     
     # Логирование
     audit_log = AuditLog(
-        user_id=context.user_id,
+        user_id=current_user["user_id"],
         action="verify_context",
         resource_type="context",
         resource_id=context.id,
         details={
+            "actor_user_id": current_user["user_id"],
+            "actor_role": current_user.get("role", "agent"),
+            "context_owner_user_id": context.user_id,
             "trust_score": trust_score,
             "classification": classification,
             "tampering": tampering_detected,
@@ -778,47 +779,33 @@ async def verify_file_for_rag(
     """
     Верификация файла для RAG (Retrieval-Augmented Generation)
     
-    Проверяет файл перед добавлением в векторную БД:
+    Проверяет файл как untrusted ingest перед добавлением в RAG:
     1. Вычисляет content_hash
     2. Проверяет на подозрительный контент
-    3. Вычисляет trust_score
-    4. Классифицирует (ACCEPT/QUARANTINE/REJECT)
+    3. Помещает безопасный файл в QUARANTINE, а не в trusted memory
+    4. Отклоняет вредоносные файлы как REJECT
     """
     # Вычисление хеша
     content_hash = crypto_service.compute_hash(file_data.file_content)
     
     # Проверка на подозрительный контент
     suspicious = security_service.check_suspicious_content(file_data.file_content)
-    
-    # Подготовка данных для верификации
-    context_record = {
-        'id': '',
-        'user_id': current_user['user_id'],
-        'content': file_data.file_content,
-        'content_hash': content_hash,
-        'created_at': utc_now_iso(),
-    }
-    
-    # Верификация (без подписи для файлов)
-    trust_score, classification, verification_details = await verifier_service.verify_context(
-        context_record,
-        signature=None,
-        public_key=None,
-    )
 
-    if suspicious:
-        verification_details['tampering_detected'] = True
-        trust_score, classification = verifier_service.finalize_verification(
-            context_record,
-            verification_details,
-        )
-    
-    # Добавление результатов проверки контента
-    verification_details['suspicious_content'] = suspicious
-    verification_details['is_safe'] = len(suspicious) == 0
+    trust_score, classification, verification_details = verifier_service.verify_file_ingest(
+        content_hash=content_hash,
+        suspicious_content=suspicious,
+    )
     
     # Сохранение в БД как DataSource
     file_id = str(uuid.uuid4())
+    data_source_config = {
+        "file_name": file_data.file_name,
+        "content_hash": content_hash,
+        "trust_score": trust_score,
+        "classification": classification,
+        "ingest_mode": "quarantine_first",
+        **verification_details,
+    }
     
     if file_data.data_source_id:
         # Обновление существующего источника
@@ -827,21 +814,18 @@ async def verify_file_for_rag(
         )
         data_source = result.scalar_one_or_none()
         if data_source and data_source.user_id == current_user['user_id']:
-            data_source.is_active = classification != "REJECT"
-            data_source.config = verification_details
+            data_source.name = file_data.file_name
+            data_source.source_type = "rag_ingest"
+            data_source.is_active = False
+            data_source.config = data_source_config
     else:
         # Создание нового источника
         data_source = DataSource(
             id=file_id,
             name=file_data.file_name,
-            source_type="rag",
-            config={
-                "content_hash": content_hash,
-                "trust_score": trust_score,
-                "classification": classification,
-                **verification_details
-            },
-            is_active=classification != "REJECT"
+            source_type="rag_ingest",
+            config=data_source_config,
+            is_active=False,
         )
         data_source.user_id = current_user['user_id']
         db.add(data_source)
@@ -852,7 +836,7 @@ async def verify_file_for_rag(
         file_id=file_id if not file_data.data_source_id else file_data.data_source_id,
         file_name=file_data.file_name,
         content_hash=content_hash,
-        is_verified=classification == "ACCEPT",
+        is_verified=False,
         trust_score=trust_score,
         classification=classification,
         verification_details=verification_details,

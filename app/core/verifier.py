@@ -168,6 +168,56 @@ class VerifierService:
         )
         
         return trust_score, classification, verification_details
+
+    def verify_file_ingest(
+        self,
+        *,
+        content_hash: str,
+        suspicious_content: Optional[Dict[str, List[str]]] = None,
+    ) -> Tuple[float, str, Dict]:
+        """
+        Evaluates an uploaded RAG file as untrusted ingest.
+
+        Files entering RAG are not trusted memory yet. A clean file can be
+        quarantined for later review/promotion, while suspicious content is
+        rejected immediately.
+        """
+        suspicious_content = suspicious_content or {}
+        is_safe = len(suspicious_content) == 0
+
+        if is_safe:
+            trust_score = settings.TRUST_THRESHOLD_QUARANTINE
+            classification = "QUARANTINE"
+            ingest_status = "QUARANTINED"
+            message = (
+                "Файл прошёл базовую проверку и помещён в ingest/quarantine. "
+                "Он ещё не считается trusted memory."
+            )
+        else:
+            trust_score = 0.0
+            classification = "REJECT"
+            ingest_status = "REJECTED"
+            message = (
+                "Файл отклонён на этапе ingest: обнаружены подозрительные паттерны."
+            )
+
+        verification_details = {
+            "signature_valid": False,
+            "hash_chain_valid": False,
+            "timestamp_fresh": True,
+            "tampering_detected": False,
+            "replay_attack_detected": False,
+            "source_trusted": False,
+            "content_hash": content_hash,
+            "suspicious_content": suspicious_content,
+            "is_safe": is_safe,
+            "ingest_status": ingest_status,
+            "eligible_for_trusted_memory": False,
+            "requires_review": is_safe,
+            "message": message,
+        }
+
+        return trust_score, classification, verification_details
     
     def analyze_features(self, content: str) -> Dict[str, float]:
         """

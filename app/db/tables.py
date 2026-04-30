@@ -159,7 +159,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
     
     id = Column(String, primary_key=True, default=generate_uuid)
-    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     
     action = Column(String, nullable=False, index=True)
     resource_type = Column(String, nullable=False)

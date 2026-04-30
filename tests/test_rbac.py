@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.routes import ContextVerifyRequest, register, verify_context
+from app.db.tables import AuditLog
 from app.core.auth import decode_token
 from app.models.auth import RegisterRequest
 
@@ -172,4 +173,9 @@ async def test_admin_can_verify_foreign_context(monkeypatch):
     assert response.context_id == "ctx-3"
     assert response.classification == "ACCEPT"
     assert response.is_valid is True
+    added_audit = next(call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], AuditLog))
+    assert added_audit.user_id == "admin-1"
+    assert added_audit.details["actor_user_id"] == "admin-1"
+    assert added_audit.details["actor_role"] == "admin"
+    assert added_audit.details["context_owner_user_id"] == "owner-1"
     db.commit.assert_awaited_once()
