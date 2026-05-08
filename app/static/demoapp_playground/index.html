@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CIVS x demoapp Playground</title>
+  <link rel="stylesheet" href="/static/demoapp_playground/index.css">
+</head>
+<body>
+  <div class="shell playground-shell">
+    <section class="hero">
+      <span class="eyebrow">demoapp Playground • Profile Injection</span>
+      <h1>Один и тот же профиль пользователя против demoapp без CIVS и с CIVS.</h1>
+      <p class="hero-copy">
+        demoapp подмешивает поля <code>goal</code> и <code>interests</code> в prompt на каждом запросе.
+        На этой странице можно вручную изменить профиль, вставить свою инъекцию и сразу увидеть,
+        как ведёт себя локальный агент без защиты и как тот же сценарий блокирует CIVS.
+      </p>
+      <div class="provider-strip" id="providerStrip"></div>
+      <div class="hero-actions">
+        <button class="primary" onclick="runSafeScenario()">Запустить безопасный сценарий</button>
+        <button class="danger" onclick="runAttackScenarioRu()">Показать русскую атаку</button>
+        <button class="ghost" onclick="runAttackScenarioEn()">Показать English-атаку</button>
+        <button class="ghost" onclick="resetPlayground()">Сбросить</button>
+      </div>
+      <p class="live-note" id="playgroundNote"></p>
+    </section>
+
+    <section class="status-banner" id="statusBanner"></section>
+    <section class="overview" id="overview"></section>
+
+    <section class="layout playground-layout">
+      <aside class="panel">
+        <div class="lane-header architecture-header">
+          <div>
+            <h2 class="lane-title">Профиль пользователя demoapp</h2>
+            <p class="lane-subtitle">
+              Эти поля сохраняются как постоянный контекст и попадают в prompt на каждом запросе.
+            </p>
+          </div>
+        </div>
+
+        <div class="control-grid">
+          <div>
+            <label for="nameInput">Имя</label>
+            <input id="nameInput" />
+          </div>
+          <div>
+            <label for="ageInput">Возраст</label>
+            <input id="ageInput" />
+          </div>
+          <div>
+            <label for="goalInput">Цель пользователя / profile memory</label>
+            <textarea id="goalInput"></textarea>
+          </div>
+          <div>
+            <label for="interestsInput">Интересы через запятую</label>
+            <textarea id="interestsInput"></textarea>
+          </div>
+          <div class="control-actions">
+            <button class="primary" onclick="saveProfile()">Сохранить профиль и проверить CIVS</button>
+            <button class="ghost" onclick="applySafeProfile()">Подставить safe profile</button>
+            <button class="ghost" onclick="applyAttackProfileRu()">Подставить русскую атаку</button>
+            <button class="ghost" onclick="applyAttackProfileEn()">Подставить English-атаку</button>
+          </div>
+        </div>
+
+        <div class="panel inset-panel">
+          <h3>Вердикт CIVS по профилю</h3>
+          <div id="profileReport"></div>
+        </div>
+      </aside>
+
+      <section class="panel">
+        <div class="lane-header architecture-header">
+          <div>
+            <h2 class="lane-title">Вопрос к локальному агенту</h2>
+            <p class="lane-subtitle">
+              Один и тот же вопрос отправляется уязвимому prompt builder и ветке с CIVS.
+            </p>
+          </div>
+        </div>
+
+        <div class="control-grid">
+          <div>
+            <label for="questionInput">Вопрос пользователя</label>
+            <textarea id="questionInput"></textarea>
+          </div>
+          <div class="control-actions">
+            <button class="primary" onclick="runCompare()">Сравнить ответы</button>
+            <button class="ghost" onclick="applySafeQuestion()">Подставить безопасный вопрос</button>
+            <button class="ghost" onclick="applyAttackQuestion()">Подставить malicious question</button>
+          </div>
+        </div>
+
+        <div class="compare-grid playground-compare">
+          <section class="panel lane lane-danger" id="vulnerableLane"></section>
+          <section class="panel lane lane-safe" id="protectedLane"></section>
+        </div>
+      </section>
+    </section>
+
+    <section class="panel panel-spaced">
+      <div class="lane-header architecture-header">
+        <div>
+          <h2 class="lane-title">Журнал playground-событий</h2>
+          <p class="lane-subtitle">
+            Видно, когда профиль стал подозрительным, и был ли запрос реально заблокирован до Ollama.
+          </p>
+        </div>
+      </div>
+      <div class="events-list" id="eventsList"></div>
+    </section>
+
+    <section class="panel panel-spaced">
+      <div class="lane-header architecture-header">
+        <div>
+          <h2 class="lane-title">Опасные запросы, остановленные CIVS</h2>
+          <p class="lane-subtitle">
+            Здесь сохраняются profile/query payload’ы, которые protected lane не пустила в локальный агент.
+          </p>
+        </div>
+      </div>
+      <div class="trace-list" id="blockedAttemptsList"></div>
+    </section>
+
+    <section class="panel panel-spaced">
+      <div class="lane-header architecture-header">
+        <div>
+          <h2 class="lane-title">Как это читать</h2>
+          <p class="lane-subtitle">
+            Лучший сценарий для демонстрации: сначала malicious profile в <code>goal</code>, затем обычный вопрос про Python.
+          </p>
+        </div>
+      </div>
+      <div class="detail-list" id="detailsGrid"></div>
+    </section>
+  </div>
+
+  <script src="/static/demoapp_playground/index.js"></script>
+</body>
+</html>

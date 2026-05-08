@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.demoapp_playground import demoapp_playground_service
 from app.core.demo_simulation import demo_simulation_service
 from app.core.live_llm_demo import live_llm_demo_service
 from app.models.context import ErrorResponse
@@ -12,6 +13,7 @@ from app.models.context import ErrorResponse
 demo_page_router = APIRouter(include_in_schema=False)
 demo_api_router = APIRouter(prefix="/api/v1/demo", tags=["demo"])
 live_demo_api_router = APIRouter(prefix="/api/v1/live-demo", tags=["live-demo"])
+demoapp_api_router = APIRouter(prefix="/api/v1/demoapp", tags=["demoapp-playground"])
 
 DEMO_NOT_FOUND_RESPONSE = {
     "model": ErrorResponse,
@@ -53,6 +55,8 @@ DEMO_STATIC_DIR = Path(__file__).resolve().parents[1] / "static" / "demo"
 DEMO_PAGE_PATH = DEMO_STATIC_DIR / "compare.html"
 LIVE_DEMO_STATIC_DIR = Path(__file__).resolve().parents[1] / "static" / "live_demo"
 LIVE_DEMO_PAGE_PATH = LIVE_DEMO_STATIC_DIR / "compare.html"
+DEMOAPP_STATIC_DIR = Path(__file__).resolve().parents[1] / "static" / "demoapp_playground"
+DEMOAPP_PAGE_PATH = DEMOAPP_STATIC_DIR / "index.html"
 
 
 class DemoMemoryRequest(BaseModel):
@@ -81,6 +85,30 @@ class DemoQuestionRequest(BaseModel):
     )
 
     question: str = Field(..., min_length=1, description="Вопрос, который будет отправлен demo-агенту после загрузки контекста в память.")
+
+
+class DemoAppProfileRequest(BaseModel):
+    model_config = ConfigDict(
+        title="DemoAppProfileRequest",
+        json_schema_extra={
+            "example": {
+                "name": "Demo User",
+                "age": "21",
+                "goal": "Получать понятные технические ответы о Python и AI.",
+                "interests": ["python", "ai", "automation"],
+            }
+        },
+    )
+
+    name: str = Field(..., min_length=1, description="Имя пользователя, которое demoapp подмешивает в prompt.")
+    age: str = Field(..., min_length=1, description="Возраст пользователя из профиля demoapp.")
+    goal: str = Field(..., min_length=1, description="Цель пользователя. Именно это поле удобно использовать для memory/profile injection.")
+    interests: list[str] = Field(default_factory=list, description="Интересы пользователя, которые тоже попадают в prompt demoapp.")
+
+
+@demo_page_router.get("/demo/demoapp-playground")
+async def demoapp_playground_page() -> FileResponse:
+    return FileResponse(DEMOAPP_PAGE_PATH)
 
 
 @demo_page_router.get("/demo/compare")
@@ -232,3 +260,79 @@ async def ask_live_demo_question(session_id: str, request: DemoQuestionRequest):
         raise HTTPException(status_code=404, detail="Live demo session not found") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@demoapp_api_router.get(
+    "/status",
+    summary="Проверить готовность demoapp playground",
+    description="Показывает, доступен ли локальный Ollama для сценария demoapp playground и какая модель будет использована.",
+)
+async def get_demoapp_playground_status():
+    return demoapp_playground_service.status()
+
+
+@demoapp_api_router.post(
+    "/session",
+    summary="Создать demoapp playground-сессию",
+    description="Создаёт in-memory playground-сессию для сравнения demoapp без CIVS и demoapp с CIVS на одном и том же профиле пользователя.",
+)
+async def create_demoapp_playground_session():
+    return demoapp_playground_service.create_session()
+
+
+@demoapp_api_router.get(
+    "/session/{session_id}",
+    summary="Получить состояние demoapp playground-сессии",
+    description="Возвращает текущий профиль пользователя, результаты CIVS-проверки, последние ответы и журнал событий demoapp playground.",
+    responses={404: DEMO_NOT_FOUND_RESPONSE},
+)
+async def get_demoapp_playground_session(session_id: str):
+    try:
+        return demoapp_playground_service.snapshot(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Demo session not found") from exc
+
+
+@demoapp_api_router.post(
+    "/session/{session_id}/reset",
+    summary="Сбросить demoapp playground-сессию",
+    description="Возвращает playground к безопасному профилю по умолчанию и очищает результаты предыдущего сравнения.",
+    responses={404: DEMO_NOT_FOUND_RESPONSE},
+)
+async def reset_demoapp_playground_session(session_id: str):
+    try:
+        return demoapp_playground_service.reset_session(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Demo session not found") from exc
+
+
+@demoapp_api_router.post(
+    "/session/{session_id}/profile",
+    summary="Обновить профиль пользователя demoapp",
+    description="Обновляет поля профиля, которые demoapp подмешивает в prompt как постоянный контекст, и сразу возвращает CIVS-вердикт по profile injection.",
+    responses={404: DEMO_NOT_FOUND_RESPONSE},
+)
+async def update_demoapp_playground_profile(session_id: str, request: DemoAppProfileRequest):
+    try:
+        return demoapp_playground_service.update_profile(
+            session_id,
+            name=request.name,
+            age=request.age,
+            goal=request.goal,
+            interests=request.interests,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Demo session not found") from exc
+
+
+@demoapp_api_router.post(
+    "/session/{session_id}/query",
+    summary="Сравнить вопрос в demoapp без CIVS и с CIVS",
+    description="Запускает один и тот же вопрос на одном и том же профиле пользователя и показывает, как отвечает demoapp напрямую и как работает защищённая ветка с CIVS.",
+    responses={404: DEMO_NOT_FOUND_RESPONSE},
+)
+async def ask_demoapp_playground_question(session_id: str, request: DemoQuestionRequest):
+    try:
+        return await demoapp_playground_service.ask_question(session_id, request.question)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Demo session not found") from exc

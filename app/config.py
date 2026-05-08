@@ -1,5 +1,22 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+
+try:
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+except ModuleNotFoundError:
+    from dataclasses import dataclass
+
+    def SettingsConfigDict(**kwargs):
+        return kwargs
+
+    @dataclass
+    class BaseSettings:
+        """
+        Lightweight fallback for demoapp imports.
+
+        The full CIVS API should still install requirements.txt. This fallback
+        lets app.core.security be imported by demoapp when only the core
+        suspicious-content checker is needed.
+        """
 
 
 class Settings(BaseSettings):
