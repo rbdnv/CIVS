@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CIVS Agent Interactions</title>
+  <link rel="stylesheet" href="/static/admin_report/index.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">CIVS admin</p>
+      <h1>Agent interaction reports</h1>
+    </div>
+    <div class="authbar">
+      <input id="tokenInput" type="password" autocomplete="off" placeholder="Admin JWT token">
+      <button id="saveTokenButton" type="button">Сохранить</button>
+      <button id="clearTokenButton" type="button" class="secondary">Сбросить</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="toolbar">
+      <label>
+        Project
+        <input id="projectFilter" value="demoapp">
+      </label>
+      <label>
+        Blocked
+        <select id="blockedFilter">
+          <option value="">Все</option>
+          <option value="true">Blocked</option>
+          <option value="false">Allowed</option>
+        </select>
+      </label>
+      <label>
+        Limit
+        <input id="limitFilter" type="number" min="1" max="200" value="100">
+      </label>
+      <button id="refreshButton" type="button">Обновить</button>
+      <span id="statusText" class="status-text">Ожидание токена</span>
+    </section>
+
+    <section id="summary" class="summary-grid"></section>
+
+    <section class="content-grid">
+      <aside class="list-panel">
+        <div class="panel-heading">
+          <h2>История</h2>
+          <span id="totalCount">0</span>
+        </div>
+        <div id="interactionList" class="interaction-list"></div>
+      </aside>
+
+      <section class="details-panel">
+        <div class="panel-heading">
+          <h2>Детали запроса</h2>
+          <span id="selectedState">Не выбран</span>
+        </div>
+        <div id="interactionDetails" class="details-empty">
+          Выберите запись из истории.
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/static/admin_report/index.js"></script>
+</body>
+</html>

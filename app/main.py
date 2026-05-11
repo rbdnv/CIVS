@@ -121,4 +121,5 @@ async def root():
         "demo": "/demo/compare",
         "live_demo": "/demo/live-compare",
         "demoapp_playground": "/demo/demoapp-playground",
+        "agent_interactions_admin": "/admin/interactions",
     }

@@ -37,6 +37,11 @@ http://localhost:8000/demo/compare
 ### 6. Открыть live LLM-демонстрацию
 http://localhost:8000/demo/live-compare
 
+### 7. Открыть admin report по demoapp interactions
+http://localhost:8000/admin/interactions
+
+Страница использует admin JWT и читает историю из `/api/v1/admin/interactions`.
+
 Для live-режима добавьте в `.env` переменную `OPENAI_API_KEY`. По умолчанию используется
 модель `gpt-4.1-mini`, но её можно поменять через `OPENAI_MODEL`.
 
@@ -91,7 +96,63 @@ python run_tests.py
 | POST | `/api/v1/contexts` | Создать контекст, требуется Bearer token |
 | POST | `/api/v1/contexts/verify` | Верифицировать контекст, требуется Bearer token |
 | POST | `/api/v1/security/check-content` | Проверить контент |
+| POST | `/api/v1/agent/interactions/evaluate` | Проверить запрос внешнего AI-agent до LLM |
+| POST | `/api/v1/agent/interactions/{interaction_id}/complete` | Сохранить ответ/ошибку protected-приложения |
+| GET | `/api/v1/admin/interactions` | Admin-only история protected-запросов |
 | GET | `/api/v1/health` | Проверка здоровья |
+
+## MVP сценарий с `/home/said/demoapp`
+
+1. Запустить PostgreSQL и применить миграции CIVS:
+
+```bash
+cd /home/said/project
+docker compose up -d postgres
+.venv/bin/alembic upgrade head
+```
+
+2. Запустить CIVS server:
+
+```bash
+.venv/bin/uvicorn app.main:app --reload --port 8000
+```
+
+3. Получить admin JWT для report-страницы. Публичная регистрация создает роль
+`agent`, поэтому для локального MVP пользователя нужно один раз повысить до admin:
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"civs-admin-demo","email":"civs-admin-demo@example.com","password":"<ADMIN_PASSWORD>"}'
+
+docker compose exec postgres psql -U civs_user -d civs_db \
+  -c "update users set is_admin = true where username = 'civs-admin-demo';"
+
+curl -sS -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"civs-admin-demo","password":"<ADMIN_PASSWORD>"}'
+```
+
+4. Открыть страницу отчета и вставить `access_token` из login-ответа:
+
+```text
+http://localhost:8000/admin/interactions
+```
+
+5. Запустить demoapp так, чтобы protected-запросы шли через HTTP CIVS gateway:
+
+```bash
+cd /home/said/demoapp
+CIVS_BASE_URL=http://localhost:8000 ./run demoapp
+```
+
+6. В demoapp выполнить safe-запрос и malicious-запрос. CIVS должен сохранить:
+
+- пользователя demoapp и `session_id`;
+- `profile.goal`, `profile.interests` и текущий вопрос;
+- verdict, trust score и detected patterns;
+- факт `blocked/allowed`;
+- ответ модели или сообщение о блокировке после `/complete`.
 
 ## Структура проекта
 

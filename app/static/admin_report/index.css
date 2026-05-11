@@ -1,0 +1,388 @@
+:root {
+  color-scheme: light;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: #f4f6f8;
+  color: #17202a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #f4f6f8;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  min-height: 38px;
+  border: 1px solid #234c7c;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: #234c7c;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+button.secondary {
+  border-color: #b8c3cf;
+  background: #ffffff;
+  color: #233243;
+}
+
+button:hover {
+  filter: brightness(0.96);
+}
+
+input,
+select {
+  min-height: 38px;
+  width: 100%;
+  border: 1px solid #c8d1db;
+  border-radius: 6px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: #17202a;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: #5b6775;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 24px;
+  border-bottom: 1px solid #d8dee6;
+  background: #ffffff;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: #6b7280;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  font-size: clamp(1.45rem, 2vw, 2rem);
+  line-height: 1.2;
+}
+
+h2 {
+  margin-bottom: 0;
+  font-size: 1rem;
+}
+
+h3 {
+  margin-bottom: 10px;
+  font-size: 0.94rem;
+}
+
+.authbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 440px) auto auto;
+  gap: 8px;
+  width: min(100%, 680px);
+}
+
+.layout {
+  display: grid;
+  gap: 16px;
+  width: min(100%, 1480px);
+  margin: 0 auto;
+  padding: 18px;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(140px, 180px) minmax(100px, 130px) auto minmax(180px, 1fr);
+  align-items: end;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.status-text {
+  align-self: center;
+  color: #5b6775;
+  font-size: 0.92rem;
+}
+
+.status-text.is-error {
+  color: #a73636;
+}
+
+.status-text.is-ok {
+  color: #1f6f54;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summary-card {
+  padding: 14px;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.summary-card span {
+  display: block;
+  color: #6b7280;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.summary-card strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.65rem;
+  line-height: 1.1;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.list-panel,
+.details-panel {
+  min-height: 520px;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e4e9ef;
+}
+
+.panel-heading span {
+  color: #6b7280;
+  font-size: 0.86rem;
+}
+
+.interaction-list {
+  display: grid;
+  gap: 0;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.interaction-item {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 16px;
+  border: 0;
+  border-bottom: 1px solid #edf1f5;
+  border-radius: 0;
+  background: #ffffff;
+  color: #17202a;
+  text-align: left;
+}
+
+.interaction-item:hover,
+.interaction-item.is-selected {
+  filter: none;
+  background: #edf5ff;
+}
+
+.interaction-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.interaction-meta,
+.muted {
+  color: #6b7280;
+  font-size: 0.86rem;
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  max-width: 100%;
+  border: 1px solid #ccd5df;
+  border-radius: 999px;
+  padding: 0 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pill.accept {
+  border-color: #abd2bf;
+  background: #ebf8f2;
+  color: #1f6f54;
+}
+
+.pill.reject {
+  border-color: #e8b2b2;
+  background: #fff0f0;
+  color: #a73636;
+}
+
+.pill.quarantine {
+  border-color: #efd08a;
+  background: #fff7df;
+  color: #8a5d14;
+}
+
+.details-panel {
+  overflow: hidden;
+}
+
+.details-empty {
+  padding: 18px;
+  color: #6b7280;
+}
+
+.details-body {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detail-box {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e1e7ee;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.detail-box.full {
+  grid-column: 1 / -1;
+}
+
+.detail-label {
+  margin-bottom: 6px;
+  color: #6b7280;
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.detail-value {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+}
+
+.checks-table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border: 1px solid #e1e7ee;
+  border-radius: 8px;
+}
+
+.checks-table th,
+.checks-table td {
+  padding: 10px;
+  border-bottom: 1px solid #e1e7ee;
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.checks-table th {
+  background: #f2f5f8;
+  color: #4b5563;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+.checks-table tr:last-child td {
+  border-bottom: 0;
+}
+
+pre {
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid #e1e7ee;
+  border-radius: 8px;
+  background: #111827;
+  color: #e5e7eb;
+  font: 0.86rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 980px) {
+  .topbar,
+  .authbar,
+  .toolbar,
+  .content-grid,
+  .detail-grid,
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    display: grid;
+  }
+
+  .authbar {
+    width: 100%;
+  }
+}
