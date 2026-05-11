@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 
+from app.api.agent_routes import agent_router
 from app.api.demo_routes import demo_api_router, demo_page_router, demoapp_api_router, live_demo_api_router
 from app.api.routes import router
 from app.config import get_settings
@@ -77,6 +78,7 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 app.include_router(router)
+app.include_router(agent_router)
 app.include_router(demo_page_router)
 app.include_router(demo_api_router)
 app.include_router(live_demo_api_router)

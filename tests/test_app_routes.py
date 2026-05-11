@@ -18,6 +18,9 @@ def test_demo_routes_and_static_mount_are_registered():
     assert "/api/v1/demo/session" in paths
     assert "/api/v1/live-demo/status" in paths
     assert "/api/v1/demoapp/status" in paths
+    assert "/api/v1/agent/interactions/evaluate" in paths
+    assert "/api/v1/agent/interactions/{interaction_id}/complete" in paths
+    assert "/api/v1/admin/interactions" in paths
     assert "/static" in paths
 
 

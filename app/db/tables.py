@@ -136,6 +136,38 @@ class VerificationResult(Base):
     context = relationship("ContextRecord", back_populates="verification_results")
 
 
+class AgentInteraction(Base):
+    __tablename__ = "agent_interactions"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    project_name = Column(String, nullable=False, index=True)
+
+    # External application identity. These users may live outside CIVS.
+    external_user_id = Column(String, nullable=True, index=True)
+    external_username = Column(String, nullable=True, index=True)
+    session_id = Column(String, nullable=True, index=True)
+
+    # Request and profile context inspected by CIVS.
+    profile_snapshot = Column(JSON, nullable=True)
+    request_text = Column(Text, nullable=False)
+
+    # Gateway decision.
+    checks = Column(JSON, nullable=True)
+    verdict = Column(String, nullable=False, index=True)
+    trust_score = Column(Float, nullable=False)
+    classification = Column(String, nullable=False)
+    blocked = Column(Boolean, default=False, index=True)
+
+    # Completion data reported by the protected application after LLM/tool execution.
+    response_text = Column(Text, nullable=True)
+    tool_action = Column(String, nullable=True)
+    tool_details = Column(JSON, nullable=True)
+    error = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    completed_at = Column(DateTime, nullable=True)
+
+
 class SecurityEvent(Base):
     __tablename__ = "security_events"
     

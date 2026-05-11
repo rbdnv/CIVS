@@ -1,13 +1,29 @@
+import os
 import sys
 from pathlib import Path
 
+import pytest
 
-DEMOAPP_ROOT = Path("/home/said/demoapp")
+
+DEMOAPP_ROOT = Path(os.getenv("DEMOAPP_ROOT", "/home/said/demoapp"))
+
+if not DEMOAPP_ROOT.exists():
+    pytest.skip(
+        "demoapp bridge integration tests require a local demoapp checkout. "
+        "Set DEMOAPP_ROOT to enable them.",
+        allow_module_level=True,
+    )
 
 if str(DEMOAPP_ROOT) not in sys.path:
     sys.path.insert(0, str(DEMOAPP_ROOT))
 
-from civs_bridge import evaluate_profile, evaluate_text, guard_interaction
+try:
+    from civs_bridge import evaluate_profile, evaluate_text, guard_interaction
+except ModuleNotFoundError as exc:
+    pytest.skip(
+        f"demoapp bridge module is not importable from {DEMOAPP_ROOT}: {exc}",
+        allow_module_level=True,
+    )
 
 
 class TestDemoAppCIVSBridge:
