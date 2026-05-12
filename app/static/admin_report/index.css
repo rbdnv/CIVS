@@ -107,9 +107,34 @@ h3 {
 
 .authbar {
   display: grid;
-  grid-template-columns: minmax(260px, 440px) auto auto;
+  grid-template-columns: minmax(150px, 200px) minmax(150px, 220px) auto auto minmax(140px, 1fr);
+  align-items: end;
   gap: 8px;
-  width: min(100%, 680px);
+  width: min(100%, 820px);
+}
+
+.authbar button:disabled,
+.authbar input:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.auth-state {
+  align-self: center;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  color: #5b6775;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.auth-state.is-ok {
+  color: #1f6f54;
+}
+
+.auth-state.is-error {
+  color: #a73636;
 }
 
 .layout {

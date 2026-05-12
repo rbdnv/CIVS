@@ -40,7 +40,8 @@ http://localhost:8000/demo/live-compare
 ### 7. Открыть admin report по demoapp interactions
 http://localhost:8000/admin/interactions
 
-Страница использует admin JWT и читает историю из `/api/v1/admin/interactions`.
+Страница принимает логин и пароль admin-пользователя, получает JWT через
+`/api/v1/auth/login` и читает историю из `/api/v1/admin/interactions`.
 
 Для live-режима добавьте в `.env` переменную `OPENAI_API_KEY`. По умолчанию используется
 модель `gpt-4.1-mini`, но её можно поменять через `OPENAI_MODEL`.
@@ -117,8 +118,9 @@ docker compose up -d postgres
 .venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
-3. Получить admin JWT для report-страницы. Публичная регистрация создает роль
-`agent`, поэтому для локального MVP пользователя нужно один раз повысить до admin:
+3. Подготовить admin-пользователя для report-страницы. Публичная регистрация
+создает роль `agent`, поэтому для локального MVP пользователя нужно один раз
+повысить до admin:
 
 ```bash
 curl -sS -X POST http://localhost:8000/api/v1/auth/register \
@@ -127,13 +129,9 @@ curl -sS -X POST http://localhost:8000/api/v1/auth/register \
 
 docker compose exec postgres psql -U civs_user -d civs_db \
   -c "update users set is_admin = true where username = 'civs-admin-demo';"
-
-curl -sS -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"civs-admin-demo","password":"<ADMIN_PASSWORD>"}'
 ```
 
-4. Открыть страницу отчета и вставить `access_token` из login-ответа:
+4. Открыть страницу отчета и войти как `civs-admin-demo`:
 
 ```text
 http://localhost:8000/admin/interactions

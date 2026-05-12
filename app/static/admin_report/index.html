@@ -12,11 +12,13 @@
       <p class="eyebrow">CIVS admin</p>
       <h1>Agent interaction reports</h1>
     </div>
-    <div class="authbar">
-      <input id="tokenInput" type="password" autocomplete="off" placeholder="Admin JWT token">
-      <button id="saveTokenButton" type="button">Сохранить</button>
-      <button id="clearTokenButton" type="button" class="secondary">Сбросить</button>
-    </div>
+    <form id="loginForm" class="authbar">
+      <input id="usernameInput" autocomplete="username" placeholder="Admin username">
+      <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Password">
+      <button id="loginButton" type="submit">Войти</button>
+      <button id="logoutButton" type="button" class="secondary">Выйти</button>
+      <span id="authState" class="auth-state">Не выполнен вход</span>
+    </form>
   </header>
 
   <main class="layout">

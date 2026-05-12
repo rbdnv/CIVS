@@ -1,6 +1,9 @@
-const tokenInput = document.getElementById("tokenInput");
-const saveTokenButton = document.getElementById("saveTokenButton");
-const clearTokenButton = document.getElementById("clearTokenButton");
+const loginForm = document.getElementById("loginForm");
+const usernameInput = document.getElementById("usernameInput");
+const passwordInput = document.getElementById("passwordInput");
+const loginButton = document.getElementById("loginButton");
+const logoutButton = document.getElementById("logoutButton");
+const authState = document.getElementById("authState");
 const refreshButton = document.getElementById("refreshButton");
 const projectFilter = document.getElementById("projectFilter");
 const blockedFilter = document.getElementById("blockedFilter");
@@ -12,11 +15,14 @@ const interactionList = document.getElementById("interactionList");
 const interactionDetails = document.getElementById("interactionDetails");
 const selectedState = document.getElementById("selectedState");
 
-const TOKEN_STORAGE_KEY = "civs_admin_jwt";
+const AUTH_STORAGE_KEY = "civs_admin_auth";
 
 const state = {
   interactions: [],
   selectedId: null,
+  token: "",
+  username: "",
+  role: "",
 };
 
 function escapeHtml(value) {
@@ -34,33 +40,56 @@ function setStatus(message, kind = "normal") {
   statusText.classList.toggle("is-error", kind === "error");
 }
 
-function getToken() {
-  return tokenInput.value.trim();
+function setAuthState(message, kind = "normal") {
+  authState.textContent = message;
+  authState.classList.toggle("is-ok", kind === "ok");
+  authState.classList.toggle("is-error", kind === "error");
 }
 
-function loadStoredToken() {
-  tokenInput.value = localStorage.getItem(TOKEN_STORAGE_KEY) || "";
+function hasAdminSession() {
+  return Boolean(state.token && state.role === "admin");
 }
 
-function saveToken() {
-  const token = getToken();
+function saveSession(auth) {
+  state.token = auth.access_token;
+  state.username = auth.username;
+  state.role = auth.role;
+  sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(auth));
+  renderAuth();
+}
 
-  if (token) {
-    localStorage.setItem(TOKEN_STORAGE_KEY, token);
-    setStatus("Admin token сохранен", "ok");
-  } else {
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
-    setStatus("Токен очищен");
+function loadStoredSession() {
+  const rawValue = sessionStorage.getItem(AUTH_STORAGE_KEY);
+
+  if (!rawValue) {
+    renderAuth();
+    return;
   }
+
+  try {
+    const auth = JSON.parse(rawValue);
+    state.token = auth.access_token || "";
+    state.username = auth.username || "";
+    state.role = auth.role || "";
+  } catch {
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  }
+
+  renderAuth();
 }
 
-function clearToken() {
-  tokenInput.value = "";
-  localStorage.removeItem(TOKEN_STORAGE_KEY);
+function clearSession(message = "Вход сброшен") {
+  state.token = "";
+  state.username = "";
+  state.role = "";
+  usernameInput.value = "";
+  passwordInput.value = "";
+  sessionStorage.removeItem(AUTH_STORAGE_KEY);
   state.interactions = [];
   state.selectedId = null;
+  renderAuth();
   render();
-  setStatus("Токен очищен");
+  setStatus(message);
 }
 
 function buildQuery() {
@@ -81,11 +110,62 @@ function buildQuery() {
   return params.toString();
 }
 
-async function loadInteractions() {
-  const token = getToken();
+async function login(event) {
+  event.preventDefault();
 
-  if (!token) {
-    setStatus("Нужен admin JWT token", "error");
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+
+  if (!username || !password) {
+    setAuthState("Введите username и password", "error");
+    return;
+  }
+
+  loginButton.disabled = true;
+  setAuthState("Проверка доступа...");
+
+  try {
+    const response = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, password }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.detail || `HTTP ${response.status}`);
+    }
+
+    if (data.role !== "admin") {
+      throw new Error("Нужна роль admin");
+    }
+
+    saveSession({
+      access_token: data.access_token,
+      role: data.role,
+      user_id: data.user_id,
+      username,
+    });
+    passwordInput.value = "";
+    setStatus("Admin-вход выполнен", "ok");
+    await loadInteractions();
+  } catch (error) {
+    clearSession("Вход не выполнен");
+    usernameInput.value = username;
+    setAuthState(`Ошибка входа: ${error.message}`, "error");
+    setStatus("Admin-вход не выполнен", "error");
+  } finally {
+    loginButton.disabled = false;
+  }
+}
+
+async function loadInteractions() {
+  if (!hasAdminSession()) {
+    setStatus("Нужен вход admin-пользователя", "error");
     render();
     return;
   }
@@ -95,7 +175,7 @@ async function loadInteractions() {
   try {
     const response = await fetch(`/api/v1/admin/interactions?${buildQuery()}`, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${state.token}`,
         Accept: "application/json",
       },
     });
@@ -110,6 +190,12 @@ async function loadInteractions() {
     render();
     setStatus(`Загружено: ${state.interactions.length}`, "ok");
   } catch (error) {
+    if (String(error.message).includes("HTTP 401") || String(error.message).includes("HTTP 403")) {
+      clearSession("Сессия истекла или нет admin-доступа");
+      setAuthState("Сессия истекла или нет admin-доступа", "error");
+      return;
+    }
+
     state.interactions = [];
     state.selectedId = null;
     render();
@@ -211,7 +297,7 @@ function renderList() {
   if (!state.interactions.length) {
     interactionList.innerHTML = `
       <div class="details-empty">
-        Reports не найдены или token не задан.
+        Reports не найдены или admin-вход не выполнен.
       </div>
     `;
     return;
@@ -370,25 +456,38 @@ function renderChecks(checks) {
   `;
 }
 
+function renderAuth() {
+  const isAdmin = hasAdminSession();
+  usernameInput.disabled = isAdmin;
+  passwordInput.disabled = isAdmin;
+  loginButton.disabled = isAdmin;
+  logoutButton.disabled = !isAdmin;
+
+  if (isAdmin) {
+    usernameInput.value = state.username;
+    setAuthState(`Admin: ${state.username}`, "ok");
+  } else {
+    setAuthState("Не выполнен вход");
+  }
+}
+
 function render() {
+  renderAuth();
   renderSummary();
   renderList();
   renderDetails();
 }
 
-saveTokenButton.addEventListener("click", () => {
-  saveToken();
-  loadInteractions();
-});
-clearTokenButton.addEventListener("click", clearToken);
+loginForm.addEventListener("submit", login);
+logoutButton.addEventListener("click", () => clearSession());
 refreshButton.addEventListener("click", loadInteractions);
 projectFilter.addEventListener("change", loadInteractions);
 blockedFilter.addEventListener("change", loadInteractions);
 limitFilter.addEventListener("change", loadInteractions);
 
-loadStoredToken();
+loadStoredSession();
 render();
 
-if (getToken()) {
+if (hasAdminSession()) {
   loadInteractions();
 }
