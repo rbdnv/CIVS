@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CIVS Dashboard</title>
-  <link rel="stylesheet" href="/static/dashboard/index.css">
+  <link rel="stylesheet" href="/static/dashboard/index.css?v=20260514-auth-hide">
 </head>
 <body>
   <div class="app-shell">
@@ -39,14 +39,16 @@
           <h1 id="sectionTitle">Contexts</h1>
         </div>
 
-        <form id="loginForm" class="authbar">
-          <label class="sr-only" for="usernameInput">Username</label>
-          <input id="usernameInput" autocomplete="username" placeholder="Username">
-          <label class="sr-only" for="passwordInput">Password</label>
-          <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Password">
-          <button id="loginButton" type="submit">Sign in</button>
-          <button id="logoutButton" class="secondary" type="button">Sign out</button>
+        <form id="loginForm" class="authbar" data-auth-mode="signed-out">
+          <div class="login-fields">
+            <label class="sr-only" for="usernameInput">Username</label>
+            <input id="usernameInput" autocomplete="username" placeholder="Username">
+            <label class="sr-only" for="passwordInput">Password</label>
+            <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Password">
+            <button id="loginButton" type="submit">Sign in</button>
+          </div>
           <span id="authState" class="auth-state">Signed out</span>
+          <button id="logoutButton" class="secondary" type="button">Sign out</button>
         </form>
       </header>
 
@@ -314,6 +316,6 @@
     </main>
   </div>
 
-  <script src="/static/dashboard/index.js?v=20260514-verify-render"></script>
+  <script src="/static/dashboard/index.js?v=20260514-auth-hide"></script>
 </body>
 </html>

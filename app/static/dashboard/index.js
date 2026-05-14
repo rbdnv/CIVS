@@ -38,6 +38,7 @@ const elements = {
   sectionKicker: document.getElementById("sectionKicker"),
   statusLine: document.getElementById("statusLine"),
   loginForm: document.getElementById("loginForm"),
+  loginFields: document.querySelector(".login-fields"),
   usernameInput: document.getElementById("usernameInput"),
   passwordInput: document.getElementById("passwordInput"),
   loginButton: document.getElementById("loginButton"),
@@ -267,12 +268,16 @@ function clearSession(message = "Signed out") {
 
 function renderAuth() {
   const signedIn = Boolean(state.token);
+  elements.loginForm.dataset.authMode = signedIn ? "signed-in" : "signed-out";
+  elements.loginFields.hidden = signedIn;
+  elements.loginFields.setAttribute("aria-hidden", signedIn ? "true" : "false");
   elements.loginButton.disabled = signedIn;
   elements.logoutButton.disabled = !signedIn;
   elements.usernameInput.disabled = signedIn;
   elements.passwordInput.disabled = signedIn;
 
   if (signedIn) {
+    elements.passwordInput.value = "";
     setAuthState(`${state.username || state.userId} (${state.role})`, "ok");
   } else {
     setAuthState("Signed out");

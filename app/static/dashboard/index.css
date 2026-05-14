@@ -286,22 +286,50 @@ pre {
 
 .authbar {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) auto auto minmax(140px, 1fr);
+  grid-template-columns: minmax(180px, 1fr) auto;
   gap: 8px;
   align-items: center;
+  justify-self: end;
+  width: min(100%, 780px);
+}
+
+.login-fields {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.login-fields[hidden] {
+  display: none !important;
+}
+
+.authbar[data-auth-mode="signed-in"] {
+  grid-template-columns: minmax(180px, max-content) auto;
+  justify-content: end;
+}
+
+.authbar[data-auth-mode="signed-in"] .login-fields {
+  display: none;
 }
 
 .auth-state {
   min-height: 38px;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   color: #657283;
   font-size: 0.9rem;
   overflow-wrap: anywhere;
 }
 
 .auth-state.is-ok {
+  border: 1px solid #b8d8ca;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: #edf8f3;
   color: #1d6d55;
+  font-weight: 700;
 }
 
 .auth-state.is-error {
@@ -566,11 +594,17 @@ pre {
   }
 
   .authbar {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .login-fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   }
 
   .auth-state {
-    grid-column: 1 / -1;
+    justify-content: flex-start;
   }
 }
 
@@ -590,12 +624,15 @@ pre {
   }
 
   .authbar {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
-  .authbar input,
-  .authbar .auth-state {
-    grid-column: 1 / -1;
+  .login-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .authbar[data-auth-mode="signed-in"] {
+    grid-template-columns: 1fr;
   }
 
   .detail-cell,
