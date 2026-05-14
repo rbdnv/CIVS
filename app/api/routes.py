@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, or_
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select, desc, or_, text
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import Optional, List
 from datetime import datetime, timedelta
 import uuid
@@ -22,12 +23,22 @@ from app.models.context import (
     ErrorResponse,
     VerificationResultResponse,
     AuditLogResponse,
+    SecurityEventResponse,
     FileVerifyRequest,
     FileVerifyResponse,
 )
 settings = get_settings()
 
-from app.db.tables import ContextRecord, VerificationResult, AuditLog, User, DataSource, HashRecord
+from app.db.tables import (
+    AuditLog,
+    ContextRecord,
+    DataSource,
+    HashRecord,
+    SecurityEvent,
+    SignatureRecord,
+    User,
+    VerificationResult,
+)
 from app.core.crypto import crypto_service
 from app.core.verifier import verifier_service
 from app.core.security import security_service
@@ -165,6 +176,170 @@ CONTENT_REQUIRED_RESPONSE = {
     },
 }
 
+SUSPICIOUS_CONTEXT_RESPONSE = {
+    "model": ErrorResponse,
+    "description": "Контекст отклонён из-за подозрительных security-паттернов",
+    "content": {
+        "application/json": {
+            "example": {
+                "detail": {
+                    "message": "Suspicious content detected; context was rejected",
+                    "detected_patterns": {
+                        "prompt_injection": ["ignore previous"],
+                    },
+                },
+            }
+        }
+    },
+}
+
+
+def _session_filter(session_id: Optional[str]):
+    if session_id is None:
+        return ContextRecord.session_id.is_(None)
+    return ContextRecord.session_id == session_id
+
+
+def add_security_event(
+    db: AsyncSession,
+    *,
+    event_type: str,
+    severity: str,
+    user_id: Optional[str],
+    context_id: Optional[str] = None,
+    description: Optional[str] = None,
+    details: Optional[dict] = None,
+):
+    event = SecurityEvent(
+        event_type=event_type,
+        severity=severity,
+        context_id=context_id,
+        user_id=user_id,
+        description=description,
+        details=details or {},
+    )
+    db.add(event)
+    return event
+
+
+async def get_latest_hash_record(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    session_id: Optional[str],
+) -> Optional[HashRecord]:
+    result = await db.execute(
+        select(HashRecord)
+        .join(ContextRecord, HashRecord.context_id == ContextRecord.id)
+        .where(ContextRecord.user_id == user_id)
+        .where(_session_filter(session_id))
+        .order_by(desc(HashRecord.sequence_number), desc(HashRecord.created_at))
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+def _context_timestamp(context: ContextRecord) -> Optional[str]:
+    return context.created_at.isoformat() if context.created_at else None
+
+
+async def verify_full_hash_chain(
+    db: AsyncSession,
+    context: ContextRecord,
+) -> tuple[bool, dict]:
+    result = await db.execute(
+        select(HashRecord, ContextRecord)
+        .join(ContextRecord, HashRecord.context_id == ContextRecord.id)
+        .where(ContextRecord.user_id == context.user_id)
+        .where(_session_filter(context.session_id))
+        .order_by(HashRecord.sequence_number, ContextRecord.created_at)
+    )
+    rows = result.all()
+
+    if not rows:
+        computed_hash = crypto_service.compute_hash_chain(
+            context.content,
+            context.previous_hash,
+            _context_timestamp(context),
+        )
+        return computed_hash == context.content_hash, {
+            "mode": "legacy_single_record",
+            "checked_records": 1,
+            "expected_hash": computed_hash,
+            "stored_hash": context.content_hash,
+        }
+
+    expected_previous_hash = None
+    expected_sequence = 1
+    target_context_found = False
+    invalid_reasons = []
+
+    for hash_record, chain_context in rows:
+        if chain_context.id == context.id:
+            target_context_found = True
+
+        computed_hash = crypto_service.compute_hash_chain(
+            chain_context.content,
+            expected_previous_hash,
+            _context_timestamp(chain_context),
+        )
+
+        if hash_record.sequence_number != expected_sequence:
+            invalid_reasons.append({
+                "context_id": chain_context.id,
+                "reason": "sequence_number_mismatch",
+                "expected": expected_sequence,
+                "actual": hash_record.sequence_number,
+            })
+
+        if chain_context.previous_hash != expected_previous_hash:
+            invalid_reasons.append({
+                "context_id": chain_context.id,
+                "reason": "context_previous_hash_mismatch",
+                "expected": expected_previous_hash,
+                "actual": chain_context.previous_hash,
+            })
+
+        if hash_record.previous_hash != expected_previous_hash:
+            invalid_reasons.append({
+                "context_id": chain_context.id,
+                "reason": "hash_record_previous_hash_mismatch",
+                "expected": expected_previous_hash,
+                "actual": hash_record.previous_hash,
+            })
+
+        if chain_context.content_hash != computed_hash:
+            invalid_reasons.append({
+                "context_id": chain_context.id,
+                "reason": "context_hash_mismatch",
+                "expected": computed_hash,
+                "actual": chain_context.content_hash,
+            })
+
+        if hash_record.hash_value != computed_hash:
+            invalid_reasons.append({
+                "context_id": chain_context.id,
+                "reason": "hash_record_value_mismatch",
+                "expected": computed_hash,
+                "actual": hash_record.hash_value,
+            })
+
+        expected_previous_hash = hash_record.hash_value
+        expected_sequence += 1
+
+    if not target_context_found:
+        invalid_reasons.append({
+            "context_id": context.id,
+            "reason": "target_context_missing_from_hash_records",
+        })
+
+    return len(invalid_reasons) == 0, {
+        "mode": "hash_records_full_chain",
+        "checked_records": len(rows),
+        "target_context_found": target_context_found,
+        "invalid_reasons": invalid_reasons,
+    }
+
 
 @router.post(
     "/auth/login",
@@ -297,8 +472,21 @@ async def register(
     summary="Проверить состояние API и базы данных",
     description="Быстрая диагностическая ручка для проверки доступности API и базовой готовности сервиса.",
 )
-async def health_check():
+async def health_check(db: AsyncSession = Depends(get_db)):
     """Проверка здоровья системы"""
+    try:
+        await db.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        response = HealthResponse(
+            status="unhealthy",
+            database="disconnected",
+            timestamp=utc_now(),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=jsonable_encoder(response),
+        )
+
     return HealthResponse(
         status="healthy",
         database="connected",
@@ -341,6 +529,7 @@ async def generate_key_pair():
         "контекста агента."
     ),
     responses={
+        400: SUSPICIOUS_CONTEXT_RESPONSE,
         401: UNAUTHORIZED_RESPONSE,
         422: VALIDATION_ERROR_RESPONSE,
     },
@@ -362,13 +551,46 @@ async def create_context(
     user_id = current_user["user_id"]
     actor_role = current_user.get("role", "agent")
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.id == user_id).with_for_update())
     existing_user = result.scalar_one_or_none()
     if not existing_user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authenticated user not found",
         )
+
+    suspicious_content = security_service.check_suspicious_content(context_data.content)
+    if suspicious_content:
+        add_security_event(
+            db,
+            event_type="suspicious_context_blocked",
+            severity="high",
+            user_id=user_id,
+            description="A context write was blocked because prompt/memory injection indicators were detected.",
+            details={
+                "detected_patterns": suspicious_content,
+                "session_id": context_data.session_id,
+                "context_type": context_data.context_type,
+                "content_hash": crypto_service.compute_hash(context_data.content),
+            },
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "message": "Suspicious content detected; context was rejected",
+                "detected_patterns": suspicious_content,
+            },
+        )
+
+    latest_hash_record = await get_latest_hash_record(
+        db,
+        user_id=user_id,
+        session_id=context_data.session_id,
+    )
+    server_previous_hash = latest_hash_record.hash_value if latest_hash_record else None
+    sequence_number = latest_hash_record.sequence_number + 1 if latest_hash_record else 1
+    client_previous_hash = context_data.previous_hash
 
     context_id = str(uuid.uuid4())
     created_at = utc_now()
@@ -377,7 +599,7 @@ async def create_context(
     # Вычисление хеша
     content_hash = crypto_service.compute_hash_chain(
         context_data.content,
-        context_data.previous_hash,
+        server_previous_hash,
         created_at_iso,
     )
     
@@ -416,7 +638,7 @@ async def create_context(
         parent_context_id=context_data.parent_context_id,
         content=context_data.content,
         content_hash=content_hash,
-        previous_hash=context_data.previous_hash,
+        previous_hash=server_previous_hash,
         context_metadata=context_data.metadata,
         context_type=context_data.context_type,
         priority=context_data.priority,
@@ -428,7 +650,44 @@ async def create_context(
     )
     
     db.add(new_context)
-    
+    db.add(
+        HashRecord(
+            context_id=context_id,
+            content=context_data.content,
+            hash_value=content_hash,
+            previous_hash=server_previous_hash,
+            sequence_number=sequence_number,
+            created_at=created_at,
+        )
+    )
+    if signature and public_key:
+        db.add(
+            SignatureRecord(
+                context_id=context_id,
+                algorithm=settings.SIGNATURE_ALGORITHM,
+                signature=signature,
+                public_key=public_key,
+                is_valid=None,
+                created_at=created_at,
+            )
+        )
+    if client_previous_hash and client_previous_hash != server_previous_hash:
+        add_security_event(
+            db,
+            event_type="client_previous_hash_ignored",
+            severity="low",
+            user_id=user_id,
+            context_id=context_id,
+            description=(
+                "Client supplied previous_hash did not match the server-side "
+                "hash-chain head and was ignored."
+            ),
+            details={
+                "client_previous_hash": client_previous_hash,
+                "server_previous_hash": server_previous_hash,
+                "session_id": context_data.session_id,
+            },
+        )
     audit_log = AuditLog(
         user_id=user_id,
         action="create_context",
@@ -436,8 +695,12 @@ async def create_context(
         resource_id=context_id,
         details={
             "content_hash": content_hash,
+            "previous_hash": server_previous_hash,
+            "sequence_number": sequence_number,
+            "client_previous_hash": client_previous_hash,
             "actor_user_id": user_id,
             "actor_role": actor_role,
+            "suspicious_content": suspicious_content,
         },
     )
     db.add(audit_log)
@@ -446,6 +709,28 @@ async def create_context(
     await db.refresh(new_context)
     
     return new_context
+
+
+@router.post(
+    "/context/append",
+    response_model=ContextResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["contexts"],
+    summary="Совместимый alias для создания контекста",
+    description="Alias для отчёта: выполняет ту же операцию, что и `POST /api/v1/contexts`.",
+    deprecated=True,
+    responses={
+        400: SUSPICIOUS_CONTEXT_RESPONSE,
+        401: UNAUTHORIZED_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
+)
+async def append_context_alias(
+    context_data: ContextCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    return await create_context(context_data, db, current_user)
 
 
 @router.post(
@@ -511,19 +796,33 @@ async def verify_context(
         context.signature,
         context.public_key,
     )
+    full_chain_valid, chain_details = await verify_full_hash_chain(db, context)
+    verification_details['hash_chain_valid'] = full_chain_valid
+    verification_details['hash_chain_details'] = chain_details
+
+    signature_result = await db.execute(
+        select(SignatureRecord)
+        .where(SignatureRecord.context_id == context.id)
+        .order_by(desc(SignatureRecord.created_at))
+        .limit(1)
+    )
+    signature_record = signature_result.scalar_one_or_none()
+    if signature_record:
+        signature_record.is_valid = verification_details.get('signature_valid', False)
     
     # Проверка на атаки
-    tampering_detected = False
+    tampering_detected = not full_chain_valid
     replay_attack_detected = False
     
     if verify_request.check_tampering:
-        tampering_detected = security_service.detect_tampering(
+        single_record_tampering = security_service.detect_tampering(
             context.content,
             context.content_hash,
             context.previous_hash,
             context.created_at.isoformat() if context.created_at else None,
         )
-        verification_details['tampering_detected'] = tampering_detected
+        tampering_detected = single_record_tampering or not full_chain_valid
+    verification_details['tampering_detected'] = tampering_detected
     
     if verify_request.check_replay and context.created_at:
         replay_attack_detected = security_service.detect_replay_attack(
@@ -570,6 +869,38 @@ async def verify_context(
         },
     )
     db.add(audit_log)
+    if tampering_detected:
+        add_security_event(
+            db,
+            event_type="context_tampering_detected",
+            severity="critical",
+            user_id=current_user["user_id"],
+            context_id=context.id,
+            description="CIVS detected a hash-chain or context integrity violation.",
+            details={
+                "actor_user_id": current_user["user_id"],
+                "context_owner_user_id": context.user_id,
+                "classification": classification,
+                "trust_score": trust_score,
+                "hash_chain_details": chain_details,
+            },
+        )
+    if replay_attack_detected:
+        add_security_event(
+            db,
+            event_type="context_replay_detected",
+            severity="high",
+            user_id=current_user["user_id"],
+            context_id=context.id,
+            description="CIVS detected stale context reuse outside the replay window.",
+            details={
+                "actor_user_id": current_user["user_id"],
+                "context_owner_user_id": context.user_id,
+                "classification": classification,
+                "trust_score": trust_score,
+                "created_at": context.created_at.isoformat() if context.created_at else None,
+            },
+        )
     
     await db.commit()
     
@@ -583,6 +914,28 @@ async def verify_context(
         details=verification_details,
         verified_at=utc_now(),
     )
+
+
+@router.post(
+    "/context/verify",
+    response_model=ContextVerifyResponse,
+    tags=["contexts"],
+    summary="Совместимый alias для проверки контекста",
+    description="Alias для отчёта: выполняет ту же операцию, что и `POST /api/v1/contexts/verify`.",
+    deprecated=True,
+    responses={
+        401: UNAUTHORIZED_RESPONSE,
+        403: FORBIDDEN_RESPONSE,
+        404: CONTEXT_NOT_FOUND_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
+)
+async def verify_context_alias(
+    verify_request: ContextVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    return await verify_context(verify_request, db, current_user)
 
 
 @router.get(
@@ -698,6 +1051,65 @@ async def list_audit_logs(
     logs = result.scalars().all()
     
     return logs
+
+
+@router.get(
+    "/audit/history",
+    response_model=List[AuditLogResponse],
+    tags=["audit"],
+    summary="Совместимый alias для журнала аудита",
+    description="Alias для отчёта: выполняет ту же операцию, что и `GET /api/v1/audit/logs`.",
+    deprecated=True,
+    responses={
+        401: UNAUTHORIZED_RESPONSE,
+        403: ADMIN_FORBIDDEN_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
+)
+async def audit_history_alias(
+    user_id: Optional[str] = Query(default=None),
+    action: Optional[str] = Query(default=None),
+    limit: int = Query(default=50, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_admin),
+):
+    return await list_audit_logs(user_id, action, limit, db, current_user)
+
+
+@router.get(
+    "/security/events",
+    response_model=List[SecurityEventResponse],
+    tags=["security"],
+    summary="Просмотреть события безопасности",
+    description=(
+        "Возвращает журнал security events: tampering, replay, suspicious ingest и "
+        "заблокированные agent gateway запросы. Доступно только администраторам."
+    ),
+    responses={
+        401: UNAUTHORIZED_RESPONSE,
+        403: ADMIN_FORBIDDEN_RESPONSE,
+        422: VALIDATION_ERROR_RESPONSE,
+    },
+)
+async def list_security_events(
+    event_type: Optional[str] = Query(default=None),
+    severity: Optional[str] = Query(default=None),
+    user_id: Optional[str] = Query(default=None),
+    limit: int = Query(default=50, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_admin),
+):
+    query = select(SecurityEvent)
+
+    if event_type:
+        query = query.where(SecurityEvent.event_type == event_type)
+    if severity:
+        query = query.where(SecurityEvent.severity == severity)
+    if user_id:
+        query = query.where(SecurityEvent.user_id == user_id)
+
+    result = await db.execute(query.order_by(desc(SecurityEvent.created_at)).limit(limit))
+    return result.scalars().all()
 
 
 class CheckContentSecurityRequest(BaseModel):
@@ -829,6 +1241,22 @@ async def verify_file_for_rag(
         )
         data_source.user_id = current_user['user_id']
         db.add(data_source)
+
+    if suspicious:
+        add_security_event(
+            db,
+            event_type="rag_ingest_rejected",
+            severity="high",
+            user_id=current_user["user_id"],
+            description="RAG file ingest was rejected because suspicious content was detected.",
+            details={
+                "file_name": file_data.file_name,
+                "data_source_id": file_data.data_source_id,
+                "content_hash": content_hash,
+                "classification": classification,
+                "detected_patterns": suspicious,
+            },
+        )
     
     await db.commit()
     

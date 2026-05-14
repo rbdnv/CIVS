@@ -140,6 +140,7 @@ class AgentInteraction(Base):
     __tablename__ = "agent_interactions"
 
     id = Column(String, primary_key=True, default=generate_uuid)
+    civs_user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
     project_name = Column(String, nullable=False, index=True)
 
     # External application identity. These users may live outside CIVS.

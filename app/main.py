@@ -118,6 +118,7 @@ async def root():
         "message": "CIVS - Context Integrity Verification System",
         "version": "1.1.0",
         "docs": "/docs",
+        "dashboard": "/dashboard",
         "demo": "/demo/compare",
         "live_demo": "/demo/live-compare",
         "demoapp_playground": "/demo/demoapp-playground",

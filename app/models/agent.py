@@ -82,6 +82,7 @@ class AgentInteractionReportResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    civs_user_id: Optional[str] = None
     project_name: str
     external_user_id: Optional[str]
     external_username: Optional[str]

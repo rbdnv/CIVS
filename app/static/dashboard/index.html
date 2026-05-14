@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CIVS Dashboard</title>
+  <link rel="stylesheet" href="/static/dashboard/index.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="/dashboard" aria-label="CIVS dashboard">
+        <span class="brand-mark">CI</span>
+        <span>
+          <strong>CIVS</strong>
+          <small>Context Integrity</small>
+        </span>
+      </a>
+
+      <nav class="nav-list" aria-label="Dashboard navigation">
+        <button class="nav-item is-active" type="button" data-view="contexts">Contexts</button>
+        <button class="nav-item" type="button" data-view="verification">Verification</button>
+        <button class="nav-item" type="button" data-view="rag">RAG ingest</button>
+        <button class="nav-item" type="button" data-view="audit">Audit</button>
+        <button class="nav-item" type="button" data-view="security">Security events</button>
+        <button class="nav-item" type="button" data-view="demo">Demo</button>
+      </nav>
+
+      <div class="sidebar-links" aria-label="External pages">
+        <a href="/docs">OpenAPI</a>
+        <a href="/admin/interactions">Agent reports</a>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div class="page-title">
+          <span id="sectionKicker">Dashboard</span>
+          <h1 id="sectionTitle">Contexts</h1>
+        </div>
+
+        <form id="loginForm" class="authbar">
+          <label class="sr-only" for="usernameInput">Username</label>
+          <input id="usernameInput" autocomplete="username" placeholder="Username">
+          <label class="sr-only" for="passwordInput">Password</label>
+          <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Password">
+          <button id="loginButton" type="submit">Sign in</button>
+          <button id="logoutButton" class="secondary" type="button">Sign out</button>
+          <span id="authState" class="auth-state">Signed out</span>
+        </form>
+      </header>
+
+      <div id="statusLine" class="status-line" role="status">Ready</div>
+
+      <section class="view is-active" data-panel="contexts">
+        <div class="split-layout">
+          <section class="panel create-panel" aria-labelledby="createContextHeading">
+            <div class="panel-heading">
+              <h2 id="createContextHeading">Create context</h2>
+              <span id="contextCreateState">Idle</span>
+            </div>
+            <form id="contextCreateForm" class="form-grid">
+              <label>
+                Content
+                <textarea id="contextContentInput" rows="8" placeholder="Context payload"></textarea>
+              </label>
+              <div class="two-col">
+                <label>
+                  Session
+                  <input id="contextSessionInput" placeholder="session-123">
+                </label>
+                <label>
+                  Type
+                  <input id="contextTypeInput" value="conversation">
+                </label>
+              </div>
+              <div class="two-col compact-row">
+                <label>
+                  Priority
+                  <input id="contextPriorityInput" type="number" min="0" max="10" value="0">
+                </label>
+                <button id="createContextButton" type="submit">Save context</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel data-panel" aria-labelledby="contextsHeading">
+            <div class="panel-heading">
+              <h2 id="contextsHeading">Contexts</h2>
+              <span id="contextsCount">0 rows</span>
+            </div>
+            <form id="contextsFilterForm" class="toolbar">
+              <label>
+                Session
+                <input id="contextsSessionFilter" placeholder="Any">
+              </label>
+              <label>
+                User
+                <input id="contextsUserFilter" placeholder="Admin filter">
+              </label>
+              <label>
+                Limit
+                <input id="contextsLimitFilter" type="number" min="1" max="100" value="50">
+              </label>
+              <button type="submit">Refresh</button>
+            </form>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Created</th>
+                    <th>Session</th>
+                    <th>Class</th>
+                    <th>Trust</th>
+                    <th>Hash</th>
+                  </tr>
+                </thead>
+                <tbody id="contextsTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel details-panel" aria-labelledby="contextDetailsHeading">
+          <div class="panel-heading">
+            <h2 id="contextDetailsHeading">Context details</h2>
+            <button id="verifySelectedContextButton" class="secondary" type="button">Verify selected</button>
+          </div>
+          <div id="contextDetails" class="details-grid"></div>
+          <div class="chain-block">
+            <div class="panel-heading flat">
+              <h3>Hash chain</h3>
+              <span id="chainState">No context selected</span>
+            </div>
+            <div class="table-wrap compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Created</th>
+                    <th>Hash</th>
+                    <th>Previous</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="chainTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" data-panel="verification">
+        <section class="panel" aria-labelledby="verificationHeading">
+          <div class="panel-heading">
+            <h2 id="verificationHeading">Verification</h2>
+            <span id="verificationState">Idle</span>
+          </div>
+          <form id="verifyForm" class="toolbar verify-toolbar">
+            <label>
+              Context ID
+              <input id="verifyContextIdInput" placeholder="UUID">
+            </label>
+            <label class="check-label">
+              <input id="verifyTamperingInput" type="checkbox" checked>
+              Tampering
+            </label>
+            <label class="check-label">
+              <input id="verifyReplayInput" type="checkbox" checked>
+              Replay
+            </label>
+            <button type="submit">Run verification</button>
+          </form>
+          <div id="verificationResult" class="result-grid"></div>
+        </section>
+      </section>
+
+      <section class="view" data-panel="rag">
+        <section class="panel" aria-labelledby="ragHeading">
+          <div class="panel-heading">
+            <h2 id="ragHeading">RAG ingest</h2>
+            <span id="ragState">Idle</span>
+          </div>
+          <form id="ragForm" class="form-grid">
+            <div class="two-col">
+              <label>
+                File name
+                <input id="ragFileNameInput" value="knowledge_base.md">
+              </label>
+              <label>
+                Data source ID
+                <input id="ragDataSourceInput" placeholder="Optional">
+              </label>
+            </div>
+            <label>
+              Content
+              <textarea id="ragContentInput" rows="10" placeholder="# Knowledge base"></textarea>
+            </label>
+            <div class="actions-row">
+              <button type="submit">Verify file</button>
+            </div>
+          </form>
+          <div id="ragResult" class="result-grid"></div>
+        </section>
+      </section>
+
+      <section class="view" data-panel="audit">
+        <section class="panel data-panel" aria-labelledby="auditHeading">
+          <div class="panel-heading">
+            <h2 id="auditHeading">Audit</h2>
+            <span id="auditCount">0 rows</span>
+          </div>
+          <form id="auditFilterForm" class="toolbar">
+            <label>
+              User
+              <input id="auditUserFilter" placeholder="Any">
+            </label>
+            <label>
+              Action
+              <input id="auditActionFilter" placeholder="Any">
+            </label>
+            <label>
+              Limit
+              <input id="auditLimitFilter" type="number" min="1" max="100" value="50">
+            </label>
+            <button type="submit">Refresh</button>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Created</th>
+                  <th>User</th>
+                  <th>Action</th>
+                  <th>Resource</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="auditTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" data-panel="security">
+        <section class="panel data-panel" aria-labelledby="securityHeading">
+          <div class="panel-heading">
+            <h2 id="securityHeading">Security events</h2>
+            <span id="securityCount">0 rows</span>
+          </div>
+          <form id="securityFilterForm" class="toolbar">
+            <label>
+              Type
+              <input id="securityTypeFilter" placeholder="Any">
+            </label>
+            <label>
+              Severity
+              <select id="securitySeverityFilter">
+                <option value="">Any</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+                <option value="critical">critical</option>
+              </select>
+            </label>
+            <label>
+              User
+              <input id="securityUserFilter" placeholder="Any">
+            </label>
+            <label>
+              Limit
+              <input id="securityLimitFilter" type="number" min="1" max="100" value="50">
+            </label>
+            <button type="submit">Refresh</button>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Created</th>
+                  <th>Severity</th>
+                  <th>Type</th>
+                  <th>User</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="securityTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" data-panel="demo">
+        <section class="panel data-panel" aria-labelledby="demoHeading">
+          <div class="panel-heading">
+            <h2 id="demoHeading">Demo</h2>
+            <span>4 pages</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Page</th>
+                  <th>Route</th>
+                  <th>Status</th>
+                  <th>Open</th>
+                </tr>
+              </thead>
+              <tbody id="demoTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/dashboard/index.js?v=20260514-verify-render"></script>
+</body>
+</html>

@@ -33,8 +33,8 @@ class Settings(BaseSettings):
     HASH_ALGORITHM: str = "SHA256"
     
     # Trust score thresholds
-    TRUST_THRESHOLD_ACCEPT: float = 0.7
-    TRUST_THRESHOLD_QUARANTINE: float = 0.4
+    TRUST_THRESHOLD_ACCEPT: float = 0.9
+    TRUST_THRESHOLD_QUARANTINE: float = 0.6
     
     # Replay attack window (seconds)
     REPLAY_WINDOW_SECONDS: int = 30

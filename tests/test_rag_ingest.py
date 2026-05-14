@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from app.api.routes import FileVerifyRequest, verify_file_for_rag
-from app.db.tables import DataSource
+from app.db.tables import DataSource, SecurityEvent
 
 
 class ScalarResult:
@@ -60,6 +60,7 @@ async def test_malicious_rag_file_is_rejected_during_ingest():
     )
 
     added_source = next(call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], DataSource))
+    added_event = next(call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], SecurityEvent))
 
     assert response.classification == "REJECT"
     assert response.is_verified is False
@@ -68,6 +69,9 @@ async def test_malicious_rag_file_is_rejected_during_ingest():
     assert "memory_poisoning" in response.verification_details["suspicious_content"]
     assert added_source.is_active is False
     assert added_source.config["classification"] == "REJECT"
+    assert added_event.event_type == "rag_ingest_rejected"
+    assert added_event.user_id == "user-1"
+    assert added_event.details["file_name"] == "attack.md"
 
 
 @pytest.mark.asyncio

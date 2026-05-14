@@ -340,27 +340,27 @@ class TestVerifier:
         """Тест классификации ACCEPT"""
         calculator = TrustScoreCalculator()
         
-        result = calculator.classify(0.8)
+        result = calculator.classify(0.95)
         assert result == "ACCEPT"
         
-        result = calculator.classify(0.7)
+        result = calculator.classify(0.9)
         assert result == "ACCEPT"
     
     def test_classify_quarantine(self):
         """Тест классификации QUARANTINE"""
         calculator = TrustScoreCalculator()
         
-        result = calculator.classify(0.69)
+        result = calculator.classify(0.89)
         assert result == "QUARANTINE"
         
-        result = calculator.classify(0.4)
+        result = calculator.classify(0.6)
         assert result == "QUARANTINE"
     
     def test_classify_reject(self):
         """Тест классификации REJECT"""
         calculator = TrustScoreCalculator()
         
-        result = calculator.classify(0.39)
+        result = calculator.classify(0.59)
         assert result == "REJECT"
         
         result = calculator.classify(0.0)

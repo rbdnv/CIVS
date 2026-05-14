@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import security_service
 from app.core.time_utils import utc_now
-from app.db.tables import AgentInteraction
+from app.db.tables import AgentInteraction, SecurityEvent
 from app.models.agent import AgentInteractionCompleteRequest, AgentInteractionEvaluateRequest
 
 
@@ -30,7 +30,9 @@ class AgentGatewayService:
         self,
         request: AgentInteractionEvaluateRequest,
         db: AsyncSession,
+        current_user: Dict[str, Any],
     ) -> AgentInteraction:
+        actor_user_id = str(current_user["user_id"])
         profile_snapshot = redact_sensitive_data(request.profile_snapshot)
         checks = self.build_checks(
             profile_snapshot=profile_snapshot,
@@ -45,6 +47,7 @@ class AgentGatewayService:
 
         interaction = AgentInteraction(
             id=str(uuid.uuid4()),
+            civs_user_id=actor_user_id,
             project_name=request.project_name.strip(),
             external_user_id=request.external_user_id,
             external_username=request.external_username,
@@ -61,6 +64,24 @@ class AgentGatewayService:
         )
 
         db.add(interaction)
+        if blocked_checks:
+            db.add(
+                SecurityEvent(
+                    event_type="agent_interaction_blocked",
+                    severity="high",
+                    user_id=actor_user_id,
+                    description="CIVS blocked an external AI-agent request before LLM execution.",
+                    details={
+                        "interaction_id": interaction.id,
+                        "project_name": interaction.project_name,
+                        "external_user_id": interaction.external_user_id,
+                        "session_id": interaction.session_id,
+                        "verdict": verdict,
+                        "trust_score": trust_score,
+                        "blocked_checks": blocked_checks,
+                    },
+                )
+            )
         await db.commit()
         await db.refresh(interaction)
         return interaction
@@ -70,8 +91,29 @@ class AgentGatewayService:
         interaction_id: str,
         request: AgentInteractionCompleteRequest,
         db: AsyncSession,
+        current_user: Dict[str, Any],
     ) -> AgentInteraction:
         interaction = await self.get_interaction(interaction_id, db)
+        actor_user_id = str(current_user["user_id"])
+        actor_role = current_user.get("role", "agent")
+
+        if actor_role != "admin" and interaction.civs_user_id != actor_user_id:
+            db.add(
+                SecurityEvent(
+                    event_type="agent_interaction_completion_denied",
+                    severity="medium",
+                    user_id=actor_user_id,
+                    description="A user attempted to complete an agent interaction owned by another CIVS user.",
+                    details={
+                        "interaction_id": interaction_id,
+                        "owner_user_id": interaction.civs_user_id,
+                        "actor_role": actor_role,
+                    },
+                )
+            )
+            await db.commit()
+            raise PermissionError("Access denied: can only complete your own agent interactions")
+
         interaction.response_text = request.response_text
         interaction.tool_action = request.tool_action or interaction.tool_action
         interaction.tool_details = redact_sensitive_data(request.tool_details)

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.agent_gateway import agent_gateway_service, build_evaluate_response
-from app.core.auth import get_current_admin
+from app.core.auth import get_current_admin, get_current_user
 from app.db.database import get_db
 from app.models.agent import (
     AgentInteractionCompleteRequest,
@@ -55,8 +55,9 @@ ADMIN_FORBIDDEN_RESPONSE = {
 async def evaluate_agent_interaction(
     request: AgentInteractionEvaluateRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
-    interaction = await agent_gateway_service.evaluate_interaction(request, db)
+    interaction = await agent_gateway_service.evaluate_interaction(request, db, current_user)
     return build_evaluate_response(interaction)
 
 
@@ -74,13 +75,19 @@ async def complete_agent_interaction(
     interaction_id: str,
     request: AgentInteractionCompleteRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     try:
-        return await agent_gateway_service.complete_interaction(interaction_id, request, db)
+        return await agent_gateway_service.complete_interaction(interaction_id, request, db, current_user)
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agent interaction not found",
+        ) from exc
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
         ) from exc
 
 

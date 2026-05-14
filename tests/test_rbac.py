@@ -84,22 +84,25 @@ async def test_agent_cannot_verify_foreign_context(monkeypatch):
 async def test_owner_can_verify_own_context(monkeypatch):
     db = AsyncMock()
     db.add = Mock()
-    db.execute.return_value = ScalarResult(
-        SimpleNamespace(
-            id="ctx-2",
-            user_id="owner-1",
-            content="safe content",
-            content_hash="hash-2",
-            previous_hash=None,
-            created_at=datetime.now(UTC).replace(tzinfo=None),
-            data_source_id=None,
-            signature=None,
-            public_key=None,
-            trust_score=None,
-            classification=None,
-            verified_at=None,
-        )
+    context = SimpleNamespace(
+        id="ctx-2",
+        user_id="owner-1",
+        session_id=None,
+        content="safe content",
+        content_hash="hash-2",
+        previous_hash=None,
+        created_at=datetime.now(UTC).replace(tzinfo=None),
+        data_source_id=None,
+        signature=None,
+        public_key=None,
+        trust_score=None,
+        classification=None,
+        verified_at=None,
     )
+    db.execute.side_effect = [
+        ScalarResult(context),
+        ScalarResult(None),
+    ]
 
     async def fake_verify_context(*args, **kwargs):
         return 0.75, "ACCEPT", {
@@ -112,6 +115,7 @@ async def test_owner_can_verify_own_context(monkeypatch):
         }
 
     monkeypatch.setattr("app.api.routes.verifier_service.verify_context", fake_verify_context)
+    monkeypatch.setattr("app.api.routes.verify_full_hash_chain", AsyncMock(return_value=(True, {"mode": "test"})))
     monkeypatch.setattr("app.api.routes.verifier_service.finalize_verification", lambda *args, **kwargs: (0.75, "ACCEPT"))
     monkeypatch.setattr("app.api.routes.security_service.detect_tampering", lambda *args, **kwargs: False)
     monkeypatch.setattr("app.api.routes.security_service.detect_replay_attack", lambda *args, **kwargs: False)
@@ -132,22 +136,25 @@ async def test_owner_can_verify_own_context(monkeypatch):
 async def test_admin_can_verify_foreign_context(monkeypatch):
     db = AsyncMock()
     db.add = Mock()
-    db.execute.return_value = ScalarResult(
-        SimpleNamespace(
-            id="ctx-3",
-            user_id="owner-1",
-            content="safe content",
-            content_hash="hash-3",
-            previous_hash=None,
-            created_at=datetime.now(UTC).replace(tzinfo=None),
-            data_source_id=None,
-            signature=None,
-            public_key=None,
-            trust_score=None,
-            classification=None,
-            verified_at=None,
-        )
+    context = SimpleNamespace(
+        id="ctx-3",
+        user_id="owner-1",
+        session_id=None,
+        content="safe content",
+        content_hash="hash-3",
+        previous_hash=None,
+        created_at=datetime.now(UTC).replace(tzinfo=None),
+        data_source_id=None,
+        signature=None,
+        public_key=None,
+        trust_score=None,
+        classification=None,
+        verified_at=None,
     )
+    db.execute.side_effect = [
+        ScalarResult(context),
+        ScalarResult(None),
+    ]
 
     async def fake_verify_context(*args, **kwargs):
         return 0.75, "ACCEPT", {
@@ -160,6 +167,7 @@ async def test_admin_can_verify_foreign_context(monkeypatch):
         }
 
     monkeypatch.setattr("app.api.routes.verifier_service.verify_context", fake_verify_context)
+    monkeypatch.setattr("app.api.routes.verify_full_hash_chain", AsyncMock(return_value=(True, {"mode": "test"})))
     monkeypatch.setattr("app.api.routes.verifier_service.finalize_verification", lambda *args, **kwargs: (0.75, "ACCEPT"))
     monkeypatch.setattr("app.api.routes.security_service.detect_tampering", lambda *args, **kwargs: False)
     monkeypatch.setattr("app.api.routes.security_service.detect_replay_attack", lambda *args, **kwargs: False)

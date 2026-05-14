@@ -59,6 +59,8 @@ DEMOAPP_STATIC_DIR = Path(__file__).resolve().parents[1] / "static" / "demoapp_p
 DEMOAPP_PAGE_PATH = DEMOAPP_STATIC_DIR / "index.html"
 ADMIN_REPORT_STATIC_DIR = Path(__file__).resolve().parents[1] / "static" / "admin_report"
 ADMIN_REPORT_PAGE_PATH = ADMIN_REPORT_STATIC_DIR / "index.html"
+DASHBOARD_STATIC_DIR = Path(__file__).resolve().parents[1] / "static" / "dashboard"
+DASHBOARD_PAGE_PATH = DASHBOARD_STATIC_DIR / "index.html"
 
 
 class DemoMemoryRequest(BaseModel):
@@ -116,6 +118,11 @@ async def demoapp_playground_page() -> FileResponse:
 @demo_page_router.get("/admin/interactions")
 async def admin_interactions_page() -> FileResponse:
     return FileResponse(ADMIN_REPORT_PAGE_PATH)
+
+
+@demo_page_router.get("/dashboard")
+async def dashboard_page() -> FileResponse:
+    return FileResponse(DASHBOARD_PAGE_PATH)
 
 
 @demo_page_router.get("/demo/compare")
